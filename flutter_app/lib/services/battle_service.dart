@@ -5,7 +5,7 @@ import 'auth_service.dart';
 
 /// Matches (battles) + leaderboard ke GET calls.
 class BattleService {
-  static const _timeout = Duration(seconds: 20);
+  static const _timeout = Duration(seconds: 60);
 
   static Future<Map<String, dynamic>> _get(String path, [Map<String, String>? query]) =>
       _request('GET', path, query: query);

@@ -1,68 +1,57 @@
 const nodemailer = require('nodemailer');
 
-// ------------------------------------------------------------------
-// Email config (.env se)
-//   EMAIL_USER = aapka gmail
-//   EMAIL_PASS = Gmail *App Password* (16 letters, spaces ho to bhi chalega)
-// ------------------------------------------------------------------
 const getConfig = () => ({
+  host: (process.env.EMAIL_HOST || 'smtp-relay.brevo.com').trim(),
+  port: parseInt(process.env.EMAIL_PORT || '587', 10),
   user: (process.env.EMAIL_USER || '').trim(),
-  // App password aksar "abcd efgh ijkl mnop" format mein milta hai - spaces hata do
-  pass: (process.env.EMAIL_PASS || '').replace(/\s+/g, ''),
+  pass: (process.env.EMAIL_PASS || '').trim(),
 });
 
 const isConfigured = () => {
   const { user, pass } = getConfig();
   if (!user || !pass) return false;
-  // .env.example ki placeholder values
   if (user.includes('aapkaemail') || pass.toLowerCase().startsWith('xxxx')) return false;
   return true;
 };
 
 const createTransporter = () => {
-  const { user, pass } = getConfig();
+  const { host, port, user, pass } = getConfig();
   return nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
+    host,
+    port,
+    secure: false,
     auth: { user, pass },
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000,
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
   });
 };
 
-// Error ko simple Hinglish hint mein badlo
 const explainError = (error) => {
   const code = error && error.code;
   const msg = (error && error.message) || '';
   if (code === 'EAUTH' || /Invalid login|Username and Password not accepted|535/i.test(msg)) {
-    return 'Gmail ne login reject kiya - App Password galat hai ya 2-Step Verification ON nahi hai. Normal Gmail password kaam nahi karta.';
+    return 'Brevo ne login reject kiya — SMTP key galat hai ya account mein SMTP enable nahi hai.';
   }
   if (['ETIMEDOUT', 'ESOCKET', 'ECONNECTION', 'ECONNREFUSED', 'EDNS', 'ENOTFOUND'].includes(code)) {
-    return 'Server Gmail (smtp.gmail.com:465) tak pahunch nahi pa raha - internet / firewall / hosting ka SMTP block check karo.';
+    return `Server ${getConfig().host}:${getConfig().port} tak pahunch nahi pa raha.`;
   }
-  if (code === 'EENVELOPE') {
-    return 'Receiver email address valid nahi hai.';
-  }
+  if (code === 'EENVELOPE') return 'Receiver email address valid nahi hai.';
   return msg || 'Unknown email error';
 };
 
 const escapeHtml = (s = '') =>
   String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-// Server start pe ek baar chalao - turant pata chal jayega email config sahi hai ya nahi
 const verifyEmailSetup = async () => {
   if (!isConfigured()) {
-    console.warn(
-      '⚠️  EMAIL_USER / EMAIL_PASS .env mein set nahi hain (ya placeholder hain). ' +
-        'OTP email nahi jayega - OTP sirf yahan console mein dikhega.'
-    );
+    console.warn('⚠️  EMAIL_USER / EMAIL_PASS .env mein set nahi hain. OTP sirf console mein dikhega.');
     return false;
   }
   try {
     await createTransporter().verify();
-    console.log(`✅ Email ready (${getConfig().user})`);
+    const { host, port, user } = getConfig();
+    console.log(`✅ Email ready — ${user} via ${host}:${port}`);
     return true;
   } catch (error) {
     console.error('❌ Email setup FAIL:', explainError(error));
@@ -70,11 +59,10 @@ const verifyEmailSetup = async () => {
   }
 };
 
-// OTP Email bhejo -> { success, error?, hint? }
-// purpose: 'verify' (register) ya 'reset' (forgot password)
 const sendOtpEmail = async (toEmail, otp, userName, purpose = 'verify') => {
   const isReset = purpose === 'reset';
   const codeName = isReset ? 'password reset code' : 'verification code';
+
   if (!isConfigured()) {
     const hint = '.env mein EMAIL_USER / EMAIL_PASS set nahi hain.';
     console.error('Email send error:', hint);

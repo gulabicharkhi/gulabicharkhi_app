@@ -5,7 +5,7 @@ import 'auth_service.dart';
 
 /// Home search bar -> GET /api/search?q=...
 class SearchService {
-  static const _timeout = Duration(seconds: 15);
+  static const _timeout = Duration(seconds: 60);
   static const minLength = 2;
 
   static Future<Map<String, dynamic>> search(String q) async {

@@ -18,7 +18,8 @@ class AuthService {
     return _liveUrl;
   }
 
-  static const _timeout = Duration(seconds: 25);
+  // Render free tier cold start mein 30-50 sec lag sakte hain
+  static const _timeout = Duration(seconds: 60);
 
   // ==================== HTTP helpers ====================
   static Map<String, dynamic> _decode(http.Response res) {
@@ -36,12 +37,12 @@ class AuthService {
     if (e is TimeoutException) {
       return {
         'success': false,
-        'message': 'Server ne response nahi diya. Internet / backend check karo.',
+        'message': 'Server thoda slow hai (pehli baar open ho raha hai). Dobara try karo.',
       };
     }
     return {
       'success': false,
-      'message': 'Server se connect nahi ho paya. Backend chal raha hai? ($baseUrl)',
+      'message': 'Internet connection check karo aur dobara try karo.',
     };
   }
 

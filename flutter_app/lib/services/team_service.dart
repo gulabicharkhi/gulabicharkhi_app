@@ -6,7 +6,7 @@ import 'auth_service.dart';
 /// Teams ke saare backend calls (/api/teams/...).
 /// Base URL aur token AuthService se hi aate hain.
 class TeamService {
-  static const _timeout = Duration(seconds: 25);
+  static const _timeout = Duration(seconds: 60);
 
   static Future<Map<String, dynamic>> _send(
     String method,
