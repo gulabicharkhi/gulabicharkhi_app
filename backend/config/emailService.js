@@ -44,7 +44,8 @@ const explainError = (error) => {
   const msg = (error && error.message) || '';
   if (error && error.brevoStatus) {
     if (error.brevoStatus === 401) return 'Brevo API key galat hai (xkeysib-... wali API key chahiye, SMTP key nahi).';
-    if (error.brevoStatus === 400 || error.brevoStatus === 403) return `Brevo ne request reject ki: ${msg}. Sender email verify karo (Senders & IP).`;
+    if (error.brevoStatus === 403) return `Brevo ne forbidden kiya: ${msg}. API key mein Transactional email = All permission check karo.`;
+    if (error.brevoStatus === 400) return `Brevo ne request reject ki: ${msg}. EMAIL_FROM verified sender hona chahiye.`;
     return `Brevo API error ${error.brevoStatus}: ${msg}`;
   }
   if (code === 'EAUTH' || /Invalid login|Username and Password not accepted|535/i.test(msg)) {
@@ -97,14 +98,8 @@ const verifyEmailSetup = async () => {
   }
   try {
     if (useApi()) {
-      const res = await fetch('https://api.brevo.com/v3/account', {
-        headers: { 'api-key': getConfig().apiKey, accept: 'application/json' },
-      });
-      if (!res.ok) {
-        const err = new Error(res.statusText);
-        err.brevoStatus = res.status;
-        throw err;
-      }
+      // Restricted key (sirf Transactional email) /account endpoint par 403 deti hai,
+      // isliye yahan network check nahi karte. Asli check pehli OTP mail par hota hai.
       console.log(`✅ Email ready — Brevo HTTP API, sender ${getConfig().from}`);
     } else {
       await createTransporter().verify();
