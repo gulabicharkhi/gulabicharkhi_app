@@ -163,8 +163,13 @@ router.post('/challenge', protect, wrap('Challenge', async (req, res) => {
   await Notification.send(
     opponentTeam.captain,
     'battle_challenge',
-    `${myTeam.name} challenged you!`,
-    `${myTeam.name} has sent a kite battle challenge. Accept to start!`,
+    `${myTeam.name} ne aapko challenge kiya! 🪁`,
+    `${myTeam.name} ne kite battle challenge bheja hai.` +
+      (battle.venue ? ` Venue: ${battle.venue}.` : '') +
+      (battle.scheduledAt
+        ? ` Time: ${new Date(battle.scheduledAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' })}.`
+        : '') +
+      ' Accept ya decline karo.',
     'Battle',
     battle._id
   );

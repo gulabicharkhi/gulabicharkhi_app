@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'notification_service.dart';
 
 class AuthService {
   // ✅ PRODUCTION: Live Render backend
@@ -123,6 +124,10 @@ class AuthService {
   }) async {
     final data = await _post('/auth/login', {'email': email, 'password': password});
     await _saveSession(data);
+    if (data['success'] == true && data['token'] != null) {
+      // Push notification ke liye is phone ka FCM token server ko do
+      NotificationService.registerToken();
+    }
     return data;
   }
 
@@ -265,6 +270,10 @@ class AuthService {
 
   // ==================== LOGOUT ====================
   static Future<void> logout() async {
+    // Pehle server se FCM token hatao (auth token abhi bhi hai), warna logout ke baad bhi push aata rahega
+    try {
+      await NotificationService.clearToken();
+    } catch (_) {}
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('auth_token');
     await prefs.remove('user_data');

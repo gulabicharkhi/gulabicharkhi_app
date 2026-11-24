@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../utils/app_theme.dart';
 import '../services/auth_service.dart';
+import '../services/notification_service.dart';
 import 'login_screen.dart';
 import 'teams_hub_screen.dart';
 import 'team_detail_screen.dart';
@@ -64,6 +65,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _loadUser();
+    // App khulte hi FCM token server par sync (pehle se login users ke liye bhi)
+    NotificationService.registerToken();
     // Mausam har 15 minute me refresh
     _weatherTimer = Timer.periodic(
       const Duration(minutes: 15),

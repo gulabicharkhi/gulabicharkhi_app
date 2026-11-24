@@ -38,6 +38,9 @@ class NotificationService {
   // main.dart mein set karo: NotificationService.onTap = (data) { ... }
   static void Function(Map<String, dynamic> data)? onTap;
 
+  // onTokenRefresh listener sirf ek baar lagta hai (registerToken kai baar call ho sakta hai)
+  static bool _refreshListening = false;
+
   // ============================================================
   // INIT — main.dart mein WidgetsFlutterBinding.ensureInitialized()
   //         ke baad call karo
@@ -105,11 +108,14 @@ class NotificationService {
       debugPrint('[FCM] Token: ${token.substring(0, 20)}...');
       await _sendTokenToServer(token);
 
-      // Token refresh hone par dobara bhejo
-      _fcm.onTokenRefresh.listen((newToken) async {
-        debugPrint('[FCM] Token refreshed');
-        await _sendTokenToServer(newToken);
-      });
+      // Token refresh hone par dobara bhejo (sirf ek baar listen karo)
+      if (!_refreshListening) {
+        _refreshListening = true;
+        _fcm.onTokenRefresh.listen((newToken) async {
+          debugPrint('[FCM] Token refreshed');
+          await _sendTokenToServer(newToken);
+        });
+      }
     } catch (e) {
       debugPrint('[FCM] Token register error: $e');
     }
