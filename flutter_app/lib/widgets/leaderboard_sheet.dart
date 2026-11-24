@@ -3,7 +3,7 @@ import '../utils/app_theme.dart';
 import '../services/battle_service.dart';
 import 'team_widgets.dart';
 
-/// Match card ke "Leaderboard" par khulti hai: top teams (wins, phir cuts).
+/// Opens from the match card "Leaderboard": top teams (wins, then cuts).
 Future<void> showLeaderboardSheet(BuildContext context) {
   return showModalBottomSheet<void>(
     context: context,
@@ -38,7 +38,7 @@ class _LeaderboardSheetState extends State<LeaderboardSheet> {
     final res = await BattleService.leaderboard();
     if (!mounted) return;
     if (res['success'] != true) {
-      setState(() => _error = (res['message'] ?? 'Leaderboard load nahi hua').toString());
+      setState(() => _error = (res['message'] ?? 'Could not load the leaderboard').toString());
       return;
     }
     setState(() => _teams = BattleService.asList(res['teams']));
@@ -76,7 +76,7 @@ class _LeaderboardSheetState extends State<LeaderboardSheet> {
                 style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: AppColors.textDark),
               ),
               const Text(
-                'Zyada wins, barabar ho to zyada cuts',
+                'More wins; if tied, more cuts',
                 style: TextStyle(fontSize: 12, color: AppColors.textGrey),
               ),
               const SizedBox(height: 10),
@@ -119,7 +119,7 @@ class _LeaderboardSheetState extends State<LeaderboardSheet> {
       return const EmptyState(
         icon: Icons.emoji_events_outlined,
         title: 'No ranked teams yet',
-        message: 'Pehla match khatam hote hi teams yahan dikhengi.',
+        message: 'Teams will show up here as soon as the first match ends.',
       );
     }
     return ListView.separated(

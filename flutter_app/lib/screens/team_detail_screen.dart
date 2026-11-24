@@ -8,9 +8,9 @@ import '../widgets/team_matches_tab.dart';
 import 'create_team_screen.dart';
 
 /// Team page.
-/// Member ko: Members | Scoreboard | Invite | Matches (+ captain ke actions)
-/// Non-member ko (public team): Members | Matches + neeche "Join team".
-/// Join ho jaye to pop hota hai team map ke saath.
+/// For a member: Members | Scoreboard | Invite | Matches (+ captain actions)
+/// For a non-member (public team): Members | Matches + "Join team" below.
+/// On joining, it pops with the team map.
 class TeamDetailScreen extends StatefulWidget {
   final String teamId;
   const TeamDetailScreen({super.key, required this.teamId});
@@ -73,7 +73,7 @@ class _TeamDetailScreenState extends State<TeamDetailScreen> {
       ? [Icons.group_outlined, Icons.bar_chart_rounded, Icons.share_outlined, Icons.sports_score_rounded]
       : [Icons.group_outlined, Icons.bar_chart_rounded, Icons.sports_score_rounded];
 
-  // Ek action chalao; response mein team ho to screen update
+  // Run an action; if the response contains a team, update the screen
   Future<bool> _run(Future<Map<String, dynamic>> Function() fn, {String? okMessage}) async {
     if (_busy) return false;
     setState(() => _busy = true);
@@ -701,8 +701,8 @@ class _TeamDetailScreenState extends State<TeamDetailScreen> {
             onPressed: code.isEmpty
                 ? null
                 : () => _copy(
-                      'Gulabi Charkhi app me meri team "${(t['name'] ?? '').toString()}" join karo! '
-                      '\n\nApp kholo > Join Team > ye code daalo: $code'
+                      'Join my team on the Gulabi Charkhi app: "${(t['name'] ?? '').toString()}" '
+                      '\n\nOpen the app > Join Team > enter this code: $code'
                       '${link.isEmpty ? '' : '\n\nLink: $link'}',
                       'Invite message'),
             icon: const Icon(Icons.share_rounded, size: 18),

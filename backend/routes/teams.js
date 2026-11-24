@@ -11,14 +11,14 @@ const DEFAULT_MAX = Team.DEFAULT_MAX_MEMBERS;
 const MIN_LIMIT = 4;
 const MAX_LIMIT = 20;
 
-// true  = public team par "Join" dabane se captain ko request jati hai (screen: "find and request to join")
-// false = public team par Join turant ho jata hai
-// Invite code / QR se join hamesha turant hota hai.
+// true  = pressing "Join" on a public team sends a request to the captain (screen: "find and request to join")
+// false = joining a public team happens immediately
+// Joining via invite code / QR is always immediate.
 const PUBLIC_JOIN_NEEDS_APPROVAL = true;
 
 // APP_INVITE_BASE_URL = Flutter deep link (e.g. gulabicharkhi://join)
 // WEB_INVITE_BASE_URL = web fallback (e.g. https://api.yourdomain.com/join)
-// Agar kuch set nahi = backend server ka own /join/CODE endpoint use karo
+// If nothing is set = use the backend server's own /join/CODE endpoint
 const INVITE_BASE = (
   process.env.APP_INVITE_BASE_URL ||
   process.env.WEB_INVITE_BASE_URL ||
@@ -45,19 +45,19 @@ const isMemberOf = (t, uid) => t.members.some((m) => sid(m) === sid(uid));
 const hasRequested = (t, uid) => (t.joinRequests || []).some((r) => sid(r.user) === sid(uid));
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-// Purani teams (tag nahi) ke liye name se tag
+// Tag derived from the name for older teams (no tag)
 const tagOf = (t) =>
   t.tag || String(t.name || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 3).toUpperCase();
 
 const inviteLinkOf = (t) => `${INVITE_BASE}/${t.inviteCode}`;
 
-// List / card ke liye chhota object (invite code yahan KABHI nahi - private team ka code leak hota tha)
+// Small object for list / card (the invite code is NEVER included here - a private team's code used to leak)
 const teamCard = (t, viewerId) => ({
   id: t._id,
   name: t.name,
   tag: tagOf(t),
   region: t.region || t.city || '',
-  city: t.region || t.city || '', // purane client ke liye
+  city: t.region || t.city || '', // for older clients
   about: t.about || '',
   logo: t.logo || null,
   isPublic: t.isPublic,
@@ -82,7 +82,7 @@ const memberView = (u, t) => {
   };
 };
 
-// Team page (Members / Scoreboard / Invite tabs) ka poora data. t.members populated hona chahiye.
+// Full data for the Team page (Members / Scoreboard / Invite tabs). t.members must be populated.
 const teamDetail = (t, viewerId) => {
   const member = isMemberOf(t, viewerId);
   const captain = isCaptainOf(t, viewerId);
@@ -96,7 +96,7 @@ const teamDetail = (t, viewerId) => {
     createdAt: t.createdAt,
     members: t.members.map((u) => memberView(u, t)),
   };
-  // Scoreboard public hai (private team ko non-member ka route hi rok deta hai)
+  // Scoreboard is public (for a private team, the route itself blocks non-members)
   out.scoreboard = {
     played,
     wins: s.wins || 0,
@@ -107,11 +107,11 @@ const teamDetail = (t, viewerId) => {
     cutsConceded: s.cutsConceded || 0,
     recentForm: [...Array(5 - form.length).fill(null), ...form], // null = "—"
   };
-  // Invite code / link sirf members ko
+  // Invite code / link only for members
   if (member) {
     out.inviteCode = t.inviteCode;
     out.inviteLink = inviteLinkOf(t);
-    out.qrData = inviteLinkOf(t); // app is string ka QR banayega
+    out.qrData = inviteLinkOf(t); // the app will generate a QR from this string
   }
   if (captain) out.pendingRequests = (t.joinRequests || []).length;
   return out;
@@ -127,7 +127,7 @@ const validImageUrl = (v, maxLen) => {
   return { error: 'Image must be a link or a small png/jpg/webp (logo up to ~200KB, cover up to ~600KB)' };
 };
 
-// Create (full) ya edit (partial) ki body validate karo
+// Validate the body of create (full) or edit (partial)
 const parseTeamInput = (body, partial = false) => {
   const out = {};
   const has = (k) => body[k] !== undefined;
@@ -181,8 +181,8 @@ const newInviteCode = async () => {
   return null;
 };
 
-// User ko team mein daalo. Dono steps atomic hain, isliye double-tap / 2 teams ek saath possible nahi.
-// return: { team } ya { status, message }
+// Put the user in the team. Both steps are atomic, so a double-tap / joining 2 teams at once is not possible.
+// return: { team } or { status, message }
 const addMember = async (teamId, userId) => {
   const claimed = await User.updateOne({ _id: userId, team: null }, { $set: { team: teamId } });
   if (!claimed.modifiedCount) return { status: 409, message: 'You are already in a team.' };
@@ -206,7 +206,7 @@ const addMember = async (teamId, userId) => {
       ? { status: 400, message: 'This team is full.' }
       : { status: 404, message: 'Team not found.' };
   }
-  // Ab ye user kisi aur team ki request nahi rakh sakta
+  // This user can no longer hold a request for any other team
   await Team.updateMany({ 'joinRequests.user': userId }, { $pull: { joinRequests: { user: userId } } });
   return { team };
 };
@@ -230,7 +230,7 @@ router.param('id', (req, res, next, id) => {
 });
 
 // ==================== @POST /api/teams/create ====================
-// Create Team screen. Banane wala captain.
+// Create Team screen. The creator becomes the captain.
 // body: name, tag, region, about?, maxMembers? (4-20, default 10), isPublic?, logo?, coverImage?
 router.post('/create', protect, wrap('Create team', async (req, res) => {
   const { data, error } = parseTeamInput(req.body, false);
@@ -283,12 +283,12 @@ router.post('/create', protect, wrap('Create team', async (req, res) => {
 
 // ==================== @GET /api/teams/mine ====================
 // Teams screen ("MY TEAMS") + dashboard gate ("Get on a team to start battling")
-// `team` = abhi ek user ek hi team mein ho sakta hai; `teams` list UI ke liye.
+// `team` = for now a user can be in only one team; `teams` is a list for the UI.
 router.get('/mine', protect, wrap('My team', async (req, res) => {
   const me = await User.findById(req.user._id).select('team');
   const team = me.team ? await loadDetail(me.team) : null;
   const detail = team ? teamDetail(team, req.user._id) : null;
-  // Pending requests (user ne kahan request bheji hai) - Teams screen par dikhane ke liye
+  // Pending requests (where the user has sent a request) - to show on the Teams screen
   const pending = await Team.find({ 'joinRequests.user': req.user._id }).select('name tag region logo members maxMembers isPublic city');
   res.status(200).json({
     success: true,
@@ -331,18 +331,18 @@ router.get('/public', protect, wrap('Public teams', async (req, res) => {
 }));
 
 // ==================== @GET /api/teams/code/:code ====================
-// Join a Team > Code tab ("Find team") aur QR scan: pehle team dikhao, phir user Join dabaye.
+// Join a Team > Code tab ("Find team") and QR scan: show the team first, then the user presses Join.
 router.get('/code/:code', protect, wrap('Find by code', async (req, res) => {
   const code = String(req.params.code || '').trim().toUpperCase();
-  // QR mein poora link ho sakta hai - last part hi code hai
+  // The QR can contain a full link - only the last part is the code
   const team = await Team.findOne({ inviteCode: code.split('/').pop() }).select('-coverImage -playerStats -stats');
   if (!team) return fail(res, 404, 'Team not found. Check the invite code.');
   res.status(200).json({ success: true, team: teamCard(team, req.user._id) });
 }));
 
 // ==================== @POST /api/teams/join ====================
-// { inviteCode }  -> turant join (code / QR captain ne khud share kiya)
-// { teamId }      -> public team: captain ko request (ya turant join, upar ka flag dekho)
+// { inviteCode }  -> join immediately (the code / QR was shared by the captain)
+// { teamId }      -> public team: request to the captain (or join immediately, see the flag above)
 router.post('/join', protect, wrap('Join team', async (req, res) => {
   const raw = String(req.body.inviteCode || '').trim().toUpperCase();
   const inviteCode = raw.split('/').pop();
@@ -400,8 +400,8 @@ router.post('/join', protect, wrap('Join team', async (req, res) => {
 }));
 
 // ==================== @POST /api/teams/leave ====================
-// Member team chhodta hai. Captain tabhi chhod sakta hai jab captaincy transfer kar de
-// (ya wo akela ho - tab team disband ho jati hai).
+// A member leaves the team. The captain can leave only after transferring captaincy
+// (or if they are alone - then the team is disbanded).
 router.post('/leave', protect, wrap('Leave team', async (req, res) => {
   const me = await User.findById(req.user._id).select('team');
   if (!me.team) return fail(res, 404, 'You are not in a team.');
@@ -422,14 +422,14 @@ router.post('/leave', protect, wrap('Leave team', async (req, res) => {
 }));
 
 // ==================== @DELETE /api/teams/requests/:id ====================
-// User apni bheji hui request wapas leta hai (:id = team id)
+// The user withdraws their sent request (:id = team id)
 router.delete('/requests/:id', protect, wrap('Cancel request', async (req, res) => {
   await Team.updateOne({ _id: req.params.id }, { $pull: { joinRequests: { user: req.user._id } } });
   res.status(200).json({ success: true, message: 'Request cancelled.' });
 }));
 
 // ==================== @GET /api/teams/leaderboard ====================
-// Top teams: zyada wins, barabar ho to zyada cuts. Sirf public teams jinhone match khela ho.
+// Top teams: more wins first, more cuts if tied. Only public teams that have played a match.
 router.get('/leaderboard', protect, wrap('Leaderboard', async (req, res) => {
   const teams = await Team.find({ isPublic: true, 'stats.played': { $gt: 0 } })
     .select('name tag region city stats members')
@@ -456,7 +456,7 @@ router.get('/leaderboard', protect, wrap('Leaderboard', async (req, res) => {
 }));
 
 // ==================== @GET /api/teams/:id ====================
-// Team page. Member ko poora (invite + scoreboard), public team ka non-member ko basic view (Join team button).
+// Team page. Members get the full view (invite + scoreboard), non-members of a public team get a basic view (Join team button).
 router.get('/:id', protect, wrap('Team detail', async (req, res) => {
   const team = await loadDetail(req.params.id);
   if (!team) return fail(res, 404, 'Team not found.');
@@ -467,7 +467,7 @@ router.get('/:id', protect, wrap('Team detail', async (req, res) => {
 }));
 
 // ==================== @GET /api/teams/:id/matches ====================
-// Matches tab. Match/battle module jab team stats record kare tab yahan uski list jodni hai.
+// Matches tab. When the match/battle module records team stats, its list needs to be added here.
 router.get('/:id/matches', protect, wrap('Team matches', async (req, res) => {
   const team = await Team.findById(req.params.id).select('members isPublic');
   if (!team) return fail(res, 404, 'Team not found.');
@@ -525,7 +525,7 @@ const captainOnly = async (req, res) => {
 };
 
 // ==================== @PUT /api/teams/:id ====================
-// Team edit: name, tag, region, about, maxMembers, isPublic, logo, coverImage (jo bhejo wahi badlega)
+// Team edit: name, tag, region, about, maxMembers, isPublic, logo, coverImage (only what you send will be changed)
 router.put('/:id', protect, wrap('Edit team', async (req, res) => {
   const team = await captainOnly(req, res);
   if (!team) return;
@@ -558,7 +558,7 @@ router.put('/:id', protect, wrap('Edit team', async (req, res) => {
 }));
 
 // ==================== @POST /api/teams/:id/regenerate-code ====================
-// Code leak ho gaya? Naya code (purana turant band)
+// Code leaked? Generate a new code (the old one stops working immediately)
 router.post('/:id/regenerate-code', protect, wrap('Regenerate code', async (req, res) => {
   const team = await captainOnly(req, res);
   if (!team) return;
@@ -605,7 +605,7 @@ router.post('/:id/requests/:userId/approve', protect, wrap('Approve request', as
   const r = await addMember(team._id, userId);
   if (!r.team) {
     if (r.status === 409) {
-      // Is beech wo kisi aur team mein chala gaya
+      // Meanwhile, they joined another team
       await Team.updateOne({ _id: team._id }, { $pull: { joinRequests: { user: userId } } });
       return fail(res, 409, 'This player has already joined another team.');
     }
@@ -628,7 +628,7 @@ router.post('/:id/requests/:userId/reject', protect, wrap('Reject request', asyn
 }));
 
 // ==================== @DELETE /api/teams/:id/members/:userId ====================
-// Captain kisi member ko nikalta hai
+// The captain removes a member
 router.delete('/:id/members/:userId', protect, wrap('Remove member', async (req, res) => {
   const team = await captainOnly(req, res);
   if (!team) return;
@@ -647,7 +647,7 @@ router.delete('/:id/members/:userId', protect, wrap('Remove member', async (req,
 }));
 
 // ==================== @POST /api/teams/:id/transfer-captain ====================
-// body: { userId } - naya captain (team ka member hona chahiye)
+// body: { userId } - the new captain (must be a member of the team)
 router.post('/:id/transfer-captain', protect, wrap('Transfer captain', async (req, res) => {
   const team = await captainOnly(req, res);
   if (!team) return;
@@ -666,7 +666,7 @@ router.post('/:id/transfer-captain', protect, wrap('Transfer captain', async (re
 }));
 
 // ==================== @DELETE /api/teams/:id ====================
-// Team disband - sab members free ho jate hain
+// Disband team - all members become free
 router.delete('/:id', protect, wrap('Delete team', async (req, res) => {
   const team = await captainOnly(req, res);
   if (!team) return;

@@ -3,8 +3,8 @@ import '../utils/app_theme.dart';
 import '../services/auth_service.dart';
 import 'login_screen.dart';
 
-/// Forgot Password - Step 3: OTP verify hone ke baad naya password set karo.
-/// Success -> Login screen (naye password se login karna hoga).
+/// Forgot Password - Step 3: set a new password after OTP verification.
+/// Success -> Login screen (you will have to log in with the new password).
 class ResetPasswordScreen extends StatefulWidget {
   final String email;
   final String resetToken;
@@ -53,7 +53,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         MaterialPageRoute(
           builder: (_) => LoginScreen(
             prefillEmail: widget.email,
-            infoMessage: 'Password reset ho gaya! Naye password se login karo.',
+            infoMessage: 'Password reset done! Log in with the new password.',
           ),
         ),
         (route) => false,

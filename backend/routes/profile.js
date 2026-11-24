@@ -30,7 +30,7 @@ router.get('/', protect, wrap('Get profile', async (req, res) => {
     user: {
       id:           user._id,
       name:         user.name,
-      playerName:   user.name, // alias jo profile screen use karta hai
+      playerName:   user.name, // alias used by the profile screen
       email:        user.email,
       city:         user.city || '',
       location:     user.city || '', // alias
@@ -53,7 +53,7 @@ router.get('/', protect, wrap('Get profile', async (req, res) => {
 // Profile update: name (playerName), city (location), phone, dateOfBirth
 // Profile screen > Update button
 router.put('/', protect, wrap('Update profile', async (req, res) => {
-  // playerName ko name ki tarah accept karo (profile screen dono bhej sakti hai)
+  // Accept playerName as name (the profile screen can send either)
   const name = req.body.name ?? req.body.playerName;
   const city = req.body.city ?? req.body.location;
   const { phone, dateOfBirth } = req.body;
@@ -102,13 +102,13 @@ router.put('/', protect, wrap('Update profile', async (req, res) => {
 
 // ==================== @PUT /api/profile/photo ====================
 // Profile photo update
-// body: { photo: "data:image/jpeg;base64,..." ya URL }
+// body: { photo: "data:image/jpeg;base64,..." or URL }
 router.put('/photo', protect, wrap('Update photo', async (req, res) => {
   const { photo } = req.body;
 
   if (photo !== null && photo !== undefined) {
     if (typeof photo !== 'string') return fail(res, 400, 'Invalid photo.');
-    // Allow null (remove), URL, ya chhota base64 (~200KB max)
+    // Allow null (remove), URL, or a small base64 (~200KB max)
     if (photo !== '' && !photo.startsWith('http') && !photo.startsWith('data:image')) {
       return fail(res, 400, 'Photo must be a URL or base64 image.');
     }
@@ -142,7 +142,7 @@ router.get('/sessions', protect, wrap('Sessions', async (req, res) => {
 }));
 
 // ==================== @DELETE /api/profile/sessions ====================
-// Logout from all sessions (token-based - frontend tokens delete karo)
+// Logout from all sessions (token-based - the frontend should delete the tokens)
 router.delete('/sessions', protect, wrap('Clear sessions', async (req, res) => {
   await User.updateOne({ _id: req.user._id }, { $set: { sessions: [] } });
   res.status(200).json({ success: true, message: 'All sessions cleared. Please login again.' });

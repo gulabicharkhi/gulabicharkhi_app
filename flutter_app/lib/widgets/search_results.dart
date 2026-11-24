@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../utils/app_theme.dart';
 import '../services/search_service.dart';
 
-/// Home search ke results (header ke neeche, home content ki jagah dikhte hain).
+/// Home search results (shown below the header, in place of the home content).
 class SearchResults extends StatelessWidget {
   final String query;
   final bool loading;
@@ -23,7 +23,7 @@ class SearchResults extends StatelessWidget {
   Widget build(BuildContext context) {
     final q = query.trim();
     if (q.length < SearchService.minLength) {
-      return _message(Icons.search_rounded, 'Kam se kam ${SearchService.minLength} letters likho');
+      return _message(Icons.search_rounded, 'Type at least ${SearchService.minLength} letters');
     }
     if (error != null) {
       return _message(Icons.wifi_off_rounded, error!);
@@ -41,7 +41,7 @@ class SearchResults extends StatelessWidget {
     final players = SearchService.list(data, 'players');
 
     if (matches.isEmpty && venues.isEmpty && teams.isEmpty && players.isEmpty) {
-      return _message(Icons.search_off_rounded, '"$q" ke liye kuch nahi mila');
+      return _message(Icons.search_off_rounded, 'Nothing found for "$q"');
     }
 
     return Padding(

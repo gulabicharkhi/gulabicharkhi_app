@@ -3,44 +3,44 @@
 
 ---
 
-## OVERVIEW: Kya-kya change hua
+## OVERVIEW: What changed
 
-| File | Status | Kya badla |
-|------|--------|-----------|
-| `config/firebase.js` | 🆕 NAYA | Firebase Admin SDK wrapper |
-| `models/User.js` | ✏️ UPDATE | `fcmToken` field add kiya |
-| `models/Notification.js` | ✏️ UPDATE | `.send()` aur `.broadcast()` ab push bhi bhejte hain |
-| `routes/notifications.js` | ✏️ UPDATE | 2 naye routes: `POST /fcm-token`, `DELETE /fcm-token` |
-| `server.js` | ✏️ UPDATE | `initFirebase()` call add kiya |
-| `lib/services/notification_service.dart` | 🆕 NAYA | Flutter FCM service |
+| File | Status | What changed |
+|------|--------|--------------|
+| `config/firebase.js` | 🆕 NEW | Firebase Admin SDK wrapper |
+| `models/User.js` | ✏️ UPDATE | Added the `fcmToken` field |
+| `models/Notification.js` | ✏️ UPDATE | `.send()` and `.broadcast()` now also send push |
+| `routes/notifications.js` | ✏️ UPDATE | 2 new routes: `POST /fcm-token`, `DELETE /fcm-token` |
+| `server.js` | ✏️ UPDATE | Added the `initFirebase()` call |
+| `lib/services/notification_service.dart` | 🆕 NEW | Flutter FCM service |
 | `main.dart` | ✏️ PATCH | Firebase.initializeApp + NotificationService.init |
 
 ---
 
 ## STEP 1: Firebase Project Setup (5 min)
 
-1. **Firebase Console** kholo: https://console.firebase.google.com
-2. **New Project** banao → "gulabi-charkhi" (ya existing mein add karo)
-3. **Cloud Messaging enable karo**:
+1. Open the **Firebase Console**: https://console.firebase.google.com
+2. Create a **New Project** → "gulabi-charkhi" (or add to an existing one)
+3. **Enable Cloud Messaging**:
    - Project Settings → Cloud Messaging → Enable
 
 ---
 
 ## STEP 2: Android Setup
 
-### 2.1 — google-services.json add karo
-1. Firebase Console → Project Settings → Your Apps → Android icon click karo
-2. Package name: `com.gulabicharkhi.app` (apna actual package name daalo)
-3. `google-services.json` download karo
-4. `android/app/google-services.json` mein rakho
+### 2.1 — Add google-services.json
+1. Firebase Console → Project Settings → Your Apps → click the Android icon
+2. Package name: `com.gulabicharkhi.app` (enter your actual package name)
+3. Download `google-services.json`
+4. Put it in `android/app/google-services.json`
 
-### 2.2 — build.gradle update karo
+### 2.2 — Update build.gradle
 
 **android/build.gradle** (project level):
 ```gradle
 buildscript {
     dependencies {
-        // existing ke baad add karo:
+        // add after the existing ones:
         classpath 'com.google.gms:google-services:4.4.0'
     }
 }
@@ -48,13 +48,13 @@ buildscript {
 
 **android/app/build.gradle** (app level):
 ```gradle
-// File ke end mein add karo:
+// Add at the end of the file:
 apply plugin: 'com.google.gms.google-services'
 ```
 
-### 2.3 — AndroidManifest.xml mein channel add karo
+### 2.3 — Add the channel in AndroidManifest.xml
 
-`android/app/src/main/AndroidManifest.xml` mein `<application>` tag ke andar:
+Inside the `<application>` tag of `android/app/src/main/AndroidManifest.xml`:
 ```xml
 <meta-data
     android:name="com.google.firebase.messaging.default_notification_channel_id"
@@ -68,12 +68,12 @@ apply plugin: 'com.google.gms.google-services'
 
 ## STEP 3: iOS Setup
 
-1. Firebase Console → Project Settings → Your Apps → iOS icon click karo
+1. Firebase Console → Project Settings → Your Apps → click the iOS icon
 2. Bundle ID: `com.gulabicharkhi.app`
-3. `GoogleService-Info.plist` download karo
-4. Xcode mein `Runner/GoogleService-Info.plist` mein add karo
-5. Xcode → Target → Signing & Capabilities → "+" → Push Notifications add karo
-6. Background Modes → "Remote notifications" check karo
+3. Download `GoogleService-Info.plist`
+4. In Xcode, add it at `Runner/GoogleService-Info.plist`
+5. Xcode → Target → Signing & Capabilities → "+" → add Push Notifications
+6. Background Modes → check "Remote notifications"
 
 ---
 
@@ -86,57 +86,57 @@ dependencies:
   flutter_local_notifications: ^18.0.1
 ```
 
-Phir run karo:
+Then run:
 ```bash
 flutter pub get
 ```
 
 ---
 
-## STEP 5: FlutterFire CLI se firebase_options.dart generate karo
+## STEP 5: Generate firebase_options.dart with the FlutterFire CLI
 
 ```bash
-# FlutterFire CLI install karo (ek baar)
+# Install the FlutterFire CLI (one time)
 dart pub global activate flutterfire_cli
 
-# Firebase CLI se login karo
+# Log in with the Firebase CLI
 firebase login
 
-# Project configure karo (project ke root se chalao)
+# Configure the project (run from the project root)
 flutterfire configure --project=gulabi-charkhi
 ```
 
-Yeh automatically `lib/firebase_options.dart` generate karega.
+This will automatically generate `lib/firebase_options.dart`.
 
 ---
 
 ## STEP 6: Backend Service Account
 
-### 6.1 — Key generate karo
+### 6.1 — Generate the key
 1. Firebase Console → Project Settings → Service Accounts
-2. "Generate new private key" → JSON file download hogi
-3. File ka naam: `firebase-service-account.json`
+2. "Generate new private key" → a JSON file will be downloaded
+3. File name: `firebase-service-account.json`
 
-### 6.2 — Backend mein add karo
+### 6.2 — Add it to the backend
 
 **Local development:**
 ```bash
-# Backend folder mein rakho (gitignore mein add karo!)
+# Keep it in the backend folder (add it to .gitignore!)
 cp ~/Downloads/firebase-service-account.json backend/firebase-service-account.json
 
-# .gitignore mein add karo:
+# Add it to .gitignore:
 echo "firebase-service-account.json" >> backend/.gitignore
 ```
 
 **Production (Render/Railway/Heroku):**
 ```bash
-# JSON ko ek line mein convert karo:
+# Convert the JSON into a single line:
 cat firebase-service-account.json | python3 -c "import sys,json; d=json.load(sys.stdin); print(json.dumps(d))"
 
-# Phir us output ko FIREBASE_SERVICE_ACCOUNT_JSON env variable mein paste karo
+# Then paste that output into the FIREBASE_SERVICE_ACCOUNT_JSON env variable
 ```
 
-### 6.3 — firebase-admin package install karo
+### 6.3 — Install the firebase-admin package
 ```bash
 cd backend
 npm install firebase-admin
@@ -144,16 +144,16 @@ npm install firebase-admin
 
 ---
 
-## STEP 7: Backend Files Replace karo
+## STEP 7: Replace the Backend Files
 
 ```bash
-# Existing files backup karo
+# Back up the existing files
 cp backend/models/User.js backend/models/User.js.backup
 cp backend/models/Notification.js backend/models/Notification.js.backup
 cp backend/routes/notifications.js backend/routes/notifications.js.backup
 cp backend/server.js backend/server.js.backup
 
-# Naye files copy karo (is package se)
+# Copy the new files (from this package)
 cp backend_firebase/config/firebase.js backend/config/firebase.js
 cp backend_firebase/models/User.js backend/models/User.js
 cp backend_firebase/models/Notification.js backend/models/Notification.js
@@ -163,38 +163,38 @@ cp backend_firebase/server.js backend/server.js
 
 ---
 
-## STEP 8: Flutter Files Add karo
+## STEP 8: Add the Flutter Files
 
 ```bash
 cp backend_firebase/lib_additions/notification_service.dart lib/services/notification_service.dart
 ```
 
-Phir `main.dart` mein ye changes karo (main_fcm_patch.dart dekho):
-1. `Firebase.initializeApp()` add karo
-2. `NotificationService.init()` add karo
-3. `AuthService.login()` mein `NotificationService.registerToken()` add karo
-4. Logout mein `NotificationService.clearToken()` add karo
+Then make these changes in `main.dart` (see main_fcm_patch.dart):
+1. Add `Firebase.initializeApp()`
+2. Add `NotificationService.init()`
+3. Add `NotificationService.registerToken()` in `AuthService.login()`
+4. Add `NotificationService.clearToken()` on logout
 
 ---
 
-## STEP 9: Test karo
+## STEP 9: Test
 
 ### Backend test:
 ```bash
 cd backend
 node server.js
-# Console mein: "🔥 Firebase Admin SDK initialized — push notifications ENABLED" dikhna chahiye
+# The console should show: "🔥 Firebase Admin SDK initialized — push notifications ENABLED"
 ```
 
 ### Flutter test:
 ```bash
 flutter run
-# Login karo → apne Firebase Console → Engage → Messaging → Test message bhejo
+# Log in → in your Firebase Console → Engage → Messaging → send a Test message
 ```
 
 ### API test (Postman/curl):
 ```bash
-# Login ke baad token leke:
+# After logging in, take the token:
 curl -X POST http://localhost:5000/api/notifications/fcm-token \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -H "Content-Type: application/json" \
@@ -206,19 +206,19 @@ curl -X POST http://localhost:5000/api/notifications/fcm-token \
 
 ## Notification Types (reference)
 
-Battles mein ye notifications jaati hain:
+These notifications are sent in battles:
 
 | Type | Trigger | Receiver |
 |------|---------|----------|
-| `battle_challenge` | Challenge bheja | Opponent captain |
-| `battle_accepted` | Challenge accept kiya | Challenger captain |
-| `battle_rejected` | Challenge reject kiya | Challenger captain |
-| `battle_cancelled` | Battle cancel kiya | Dusri side ka captain |
-| `battle_started` | Dono ready → LIVE | Dono teams ke sare members |
-| `cut_claimed` | Kite cut claim kiya | Opponent captain |
-| `cut_approved` | Cut approve kiya | Claiming captain |
-| `cut_rejected` | Cut reject kiya | Claiming captain |
-| `battle_ended` | Battle end | Dono teams ke sare members |
+| `battle_challenge` | Challenge sent | Opponent captain |
+| `battle_accepted` | Challenge accepted | Challenger captain |
+| `battle_rejected` | Challenge rejected | Challenger captain |
+| `battle_cancelled` | Battle cancelled | Captain of the other side |
+| `battle_started` | Both ready → LIVE | All members of both teams |
+| `cut_claimed` | Kite cut claimed | Opponent captain |
+| `cut_approved` | Cut approved | Claiming captain |
+| `cut_rejected` | Cut rejected | Claiming captain |
+| `battle_ended` | Battle ended | All members of both teams |
 
 ---
 
@@ -226,11 +226,11 @@ Battles mein ye notifications jaati hain:
 
 | Problem | Solution |
 |---------|----------|
-| "Firebase not ready" | Service account JSON check karo — valid hai? |
-| Android par notification nahi aati | `google-services.json` check karo, build.gradle plugins check karo |
-| iOS par notification nahi aati | APNs certificate check karo, capabilities check karo |
-| "invalid_token" error | User ne app uninstall kiya hoga — token auto-clear ho jata hai |
-| Background mein notification nahi aati | AndroidManifest channel ID check karo |
+| "Firebase not ready" | Check the service account JSON — is it valid? |
+| Notification does not arrive on Android | Check `google-services.json`, check the build.gradle plugins |
+| Notification does not arrive on iOS | Check the APNs certificate, check the capabilities |
+| "invalid_token" error | The user has probably uninstalled the app — the token is auto-cleared |
+| Notification does not arrive in the background | Check the AndroidManifest channel ID |
 
 ---
 

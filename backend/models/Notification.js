@@ -2,14 +2,14 @@
 // Notification Model — UPDATED with Firebase Push Support
 // models/Notification.js
 //
-// Purana model ka pura behaviour SAME hai.
-// Naya feature: .send() aur .broadcast() ab FCM push bhi bhejte hain.
+// The old model behaviour is exactly the SAME.
+// New feature: .send() and .broadcast() now also send FCM push.
 //
 // Flow:
-//  1. DB mein notification save hoti hai (pehle jaisi)
-//  2. User ka fcmToken fetch hota hai (User model se)
-//  3. Firebase se push bheja jata hai
-//  4. Push fail ho to bhi main operation fail nahi hoti
+//  1. The notification is saved in the DB (as before)
+//  2. The user's fcmToken is fetched (from the User model)
+//  3. The push is sent via Firebase
+//  4. If the push fails, the main operation still does not fail
 // ============================================================
 
 const mongoose = require('mongoose');
@@ -31,13 +31,13 @@ NotificationSchema.index({ user: 1, createdAt: -1 });
 const idOf = (v) => (v && v._id ? v._id : v);
 
 // ============================================================
-// Ek user ko notification + push bhejo
+// Send a notification + push to one user
 // ============================================================
 NotificationSchema.statics.send = async function (user, type, title, body, refType = null, refId = null) {
   try {
     if (!user) return null;
 
-    // 1. DB mein save karo
+    // 1. Save in the DB
     const notification = await this.create({
       user: idOf(user),
       type,
@@ -47,13 +47,13 @@ NotificationSchema.statics.send = async function (user, type, title, body, refTy
       refId: idOf(refId) || null,
     });
 
-    // 2. FCM push bhejo (async, non-blocking)
+    // 2. Send the FCM push (async, non-blocking)
     _pushToUser(idOf(user), title, body, {
       type,
       refType: refType || '',
       refId: refId ? String(idOf(refId)) : '',
       notifId: String(notification._id),
-    }).catch(() => {}); // fail hone par ignore
+    }).catch(() => {}); // ignore on failure
 
     return notification;
   } catch (e) {
@@ -63,19 +63,19 @@ NotificationSchema.statics.send = async function (user, type, title, body, refTy
 };
 
 // ============================================================
-// Bahut saare users ko notification + push bhejo
+// Send a notification + push to many users
 // ============================================================
 NotificationSchema.statics.broadcast = async function (users, type, title, body, refType = null, refId = null) {
   try {
     const unique = [...new Set((users || []).filter(Boolean).map((u) => String(idOf(u))))];
     if (!unique.length) return [];
 
-    // 1. DB mein sab save karo
+    // 1. Save all in the DB
     const notifications = await this.insertMany(
       unique.map((u) => ({ user: u, type, title, body, refType, refId: idOf(refId) || null }))
     );
 
-    // 2. FCM push bhejo (async, non-blocking)
+    // 2. Send the FCM push (async, non-blocking)
     _pushToUsers(unique, title, body, {
       type,
       refType: refType || '',
@@ -90,10 +90,10 @@ NotificationSchema.statics.broadcast = async function (users, type, title, body,
 };
 
 // ============================================================
-// Internal helpers — User model se fcmToken lao
+// Internal helpers — get fcmToken from the User model
 // ============================================================
 
-// User model ko lazily require karo (circular dependency avoid ke liye)
+// Require the User model lazily (to avoid a circular dependency)
 function getUserModel() {
   return require('./User');
 }
@@ -106,7 +106,7 @@ async function _pushToUser(userId, title, body, data) {
 
     const result = await sendPush(user.fcmToken, { title, body, data });
 
-    // Invalid token ho to User se remove karo
+    // If the token is invalid, remove it from the User
     if (result.error === 'invalid_token') {
       await User.updateOne({ _id: userId }, { $unset: { fcmToken: 1 } });
     }
@@ -128,7 +128,7 @@ async function _pushToUsers(userIds, title, body, data) {
     const tokens = users.map((u) => u.fcmToken);
     const tokenToUserId = Object.fromEntries(users.map((u) => [u.fcmToken, String(u._id)]));
 
-    // Invalid tokens ko DB se clean karo
+    // Clean invalid tokens from the DB
     const cleanupFn = async (invalidTokens) => {
       await User.updateMany(
         { fcmToken: { $in: invalidTokens } },

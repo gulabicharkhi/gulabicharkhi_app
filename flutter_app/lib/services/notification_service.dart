@@ -1,15 +1,15 @@
 // ============================================================
 // lib/services/notification_service.dart
 //
-// Firebase Cloud Messaging (FCM) ka Flutter side setup.
+// Flutter-side setup for Firebase Cloud Messaging (FCM).
 //
-// USAGE (main.dart mein):
+// USAGE (in main.dart):
 //   await NotificationService.init();
 //
-// USAGE (login ke baad ya AuthService.login() mein):
+// USAGE (after login or in AuthService.login()):
 //   await NotificationService.registerToken();
 //
-// USAGE (logout mein):
+// USAGE (in logout):
 //   await NotificationService.clearToken();
 // ============================================================
 
@@ -23,8 +23,8 @@ import 'auth_service.dart';
 // ── Background message handler (top-level function — required by FCM) ──────
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // App background mein hai tab message aaya
-  // Firebase already notification show kar deta hai Android par
+  // A message arrived while the app is in the background
+  // Firebase already shows the notification on Android
   debugPrint('[FCM] Background message: ${message.messageId}');
 }
 
@@ -34,26 +34,26 @@ class NotificationService {
   static final _fcm         = FirebaseMessaging.instance;
   static final _localPlugin = FlutterLocalNotificationsPlugin();
 
-  // ── Notification tap par navigate karne ke liye ───────────────────────────
-  // main.dart mein set karo: NotificationService.onTap = (data) { ... }
+  // ── To navigate on notification tap ───────────────────────────
+  // Set in main.dart: NotificationService.onTap = (data) { ... }
   static void Function(Map<String, dynamic> data)? onTap;
 
-  // onTokenRefresh listener sirf ek baar lagta hai (registerToken kai baar call ho sakta hai)
+  // The onTokenRefresh listener is attached only once (registerToken can be called multiple times)
   static bool _refreshListening = false;
 
   // ============================================================
-  // INIT — main.dart mein WidgetsFlutterBinding.ensureInitialized()
-  //         ke baad call karo
+  // INIT — in main.dart, after WidgetsFlutterBinding.ensureInitialized()
+  //         call this
   // ============================================================
   static Future<void> init() async {
-    // 1. Background handler register karo
+    // 1. Register the background handler
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-    // 2. Android notification channel create karo (high importance)
+    // 2. Create the Android notification channel (high importance)
     const channel = AndroidNotificationChannel(
-      'gulabi_battles',          // server se jo channelId bheja hai usse match karo
+      'gulabi_battles',          // match the channelId sent by the server
       'Gulabi Battle Alerts',
-      description: 'Kite battle challenges aur updates',
+      description: 'Kite battle challenges and updates',
       importance: Importance.high,
       playSound: true,
     );
@@ -63,7 +63,7 @@ class NotificationService {
             AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(channel);
 
-    // 3. flutter_local_notifications initialize karo
+    // 3. Initialize flutter_local_notifications
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosSettings     = DarwinInitializationSettings(
       requestAlertPermission: true,
@@ -75,20 +75,20 @@ class NotificationService {
       onDidReceiveNotificationResponse: _onLocalNotificationTap,
     );
 
-    // 4. iOS/macOS permissions maango
+    // 4. iOS/macOS permissions: request them
     await _fcm.requestPermission(
       alert: true,
       badge: true,
       sound: true,
     );
 
-    // 5. Foreground messages handle karo (app khuli ho tab)
+    // 5. Handle foreground messages (when the app is open)
     FirebaseMessaging.onMessage.listen(_onForegroundMessage);
 
-    // 6. Notification tap handle karo (app background se open hui)
+    // 6. Handle notification tap (app opened from the background)
     FirebaseMessaging.onMessageOpenedApp.listen(_onMessageOpenedApp);
 
-    // 7. App terminate thi aur notification se khuli
+    // 7. The app was terminated and opened from a notification
     final initial = await _fcm.getInitialMessage();
     if (initial != null) {
       _handleNavigation(initial.data);
@@ -98,7 +98,7 @@ class NotificationService {
   }
 
   // ============================================================
-  // TOKEN REGISTER — login ke baad call karo
+  // TOKEN REGISTER — call after login
   // ============================================================
   static Future<void> registerToken() async {
     try {
@@ -108,7 +108,7 @@ class NotificationService {
       debugPrint('[FCM] Token: ${token.substring(0, 20)}...');
       await _sendTokenToServer(token);
 
-      // Token refresh hone par dobara bhejo (sirf ek baar listen karo)
+      // Send again when the token refreshes (listen only once)
       if (!_refreshListening) {
         _refreshListening = true;
         _fcm.onTokenRefresh.listen((newToken) async {
@@ -122,7 +122,7 @@ class NotificationService {
   }
 
   // ============================================================
-  // TOKEN CLEAR — logout par call karo
+  // TOKEN CLEAR — call on logout
   // ============================================================
   static Future<void> clearToken() async {
     try {
@@ -167,7 +167,7 @@ class NotificationService {
     }
   }
 
-  // App foreground mein hai to local notification dikhao
+  // If the app is in the foreground, show a local notification
   static Future<void> _onForegroundMessage(RemoteMessage message) async {
     debugPrint('[FCM] Foreground message: ${message.notification?.title}');
     final notification = message.notification;
@@ -182,7 +182,7 @@ class NotificationService {
         android: AndroidNotificationDetails(
           'gulabi_battles',
           'Gulabi Battle Alerts',
-          channelDescription: 'Kite battle challenges aur updates',
+          channelDescription: 'Kite battle challenges and updates',
           importance: Importance.high,
           priority:   Priority.high,
           icon: android?.smallIcon ?? '@mipmap/ic_launcher',
@@ -211,12 +211,12 @@ class NotificationService {
     } catch (_) {}
   }
 
-  // Notification data ke basis par navigate karo
+  // Navigate based on the notification data
   static void _handleNavigation(Map<String, dynamic> data) {
     if (onTap != null) {
       onTap!(data);
     } else {
-      // Default: data print karo (onTap set nahi hai)
+      // Default: print the data (onTap is not set)
       debugPrint('[FCM] Navigation data: $data');
     }
   }

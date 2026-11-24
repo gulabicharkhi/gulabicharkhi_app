@@ -5,11 +5,11 @@ import 'create_team_screen.dart';
 import 'join_team_screen.dart';
 
 /// "Get on a team to start battling" screen.
-/// - Create a team  -> naam daalo, captain bano, invite code share karo
-/// - Join a team    -> invite code ya public team list se
-/// - Skip for now   -> seedha Dashboard
+/// - Create a team  -> enter a name, become captain, share the invite code
+/// - Join a team    -> via an invite code or the public team list
+/// - Skip for now   -> straight to the Dashboard
 ///
-/// [fromDashboard] true ho (Teams tab se khola gaya) to Skip/Done par sirf pop hota hai.
+/// If [fromDashboard] is true (opened from the Teams tab), Skip/Done only pops.
 class TeamSetupScreen extends StatelessWidget {
   final bool fromDashboard;
   const TeamSetupScreen({super.key, this.fromDashboard = false});
@@ -28,7 +28,7 @@ class TeamSetupScreen extends StatelessWidget {
     }
   }
 
-  // Create / Join ab poori screen hain. Team ban/join ho jaye to aage badho.
+  // Create / Join are now full screens. Once a team is created/joined, move ahead.
   Future<void> _open(BuildContext context, Widget screen) async {
     final team = await Navigator.push<Map<String, dynamic>>(
       context,

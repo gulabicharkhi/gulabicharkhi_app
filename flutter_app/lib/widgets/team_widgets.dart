@@ -5,7 +5,7 @@ import '../utils/app_theme.dart';
 const kTeamPageBg = Color(0xFFFDEBF4);
 const kTeamHeaderColors = [Color(0xFFE93D95), Color(0xFFA64CF5)];
 
-/// Gradient header (back button + title + subtitle) - sab team screens mein same
+/// Gradient header (back button + title + subtitle) - same on all team screens
 class GradientHeader extends StatelessWidget {
   final String title;
   final String? subtitle;
@@ -103,7 +103,7 @@ class HeaderIconButton extends StatelessWidget {
   }
 }
 
-/// Team ka logo. logo (URL / data URI) ho to wo, warna tag letters gradient square par.
+/// Team logo. If there is a logo (URL / data URI) show it, otherwise the tag letters on a gradient square.
 class TeamAvatar extends StatelessWidget {
   final String name;
   final String tag;
@@ -178,7 +178,7 @@ class TeamAvatar extends StatelessWidget {
   }
 }
 
-/// Chhota rounded label (Public / Ready / Full / Captain ...)
+/// Small rounded label (Public / Ready / Full / Captain ...)
 class MiniPill extends StatelessWidget {
   final String text;
   final Color fg;
@@ -335,7 +335,7 @@ class PillTabs extends StatelessWidget {
   }
 }
 
-/// Browse list / My teams list ki ek row
+/// One row of the Browse list / My teams list
 class TeamRow extends StatelessWidget {
   final Map<String, dynamic> team;
   final Widget? trailing;
@@ -420,7 +420,7 @@ class TeamRow extends StatelessWidget {
   }
 }
 
-/// Chhota pink "Join" button
+/// Small pink "Join" button
 class SmallPinkButton extends StatelessWidget {
   final String text;
   final VoidCallback? onTap;

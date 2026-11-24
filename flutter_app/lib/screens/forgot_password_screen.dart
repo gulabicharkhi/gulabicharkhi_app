@@ -3,7 +3,7 @@ import '../utils/app_theme.dart';
 import '../services/auth_service.dart';
 import 'otp_screen.dart';
 
-/// Forgot Password - Step 1: email daalo -> OTP jayega -> OTP screen
+/// Forgot Password - Step 1: enter email -> OTP is sent -> OTP screen
 class ForgotPasswordScreen extends StatefulWidget {
   final String? prefillEmail;
   const ForgotPasswordScreen({super.key, this.prefillEmail});

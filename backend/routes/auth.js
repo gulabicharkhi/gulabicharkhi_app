@@ -13,7 +13,7 @@ const normEmail = (e) => String(e || '').trim().toLowerCase();
 
 // ==================== Helpers ====================
 
-// Flutter ko jo user object bhejna hai
+// The user object to send to Flutter
 const publicUser = (user) => ({
   id: user._id,
   name: user.name,
@@ -33,22 +33,22 @@ const publicUser = (user) => ({
       : null,
 });
 
-// OTP email bhejo. Agar email fail ho to dev mein OTP console mein print hoga
-// aur response mein bata diya jayega ki email nahi gaya (pehle chup-chaap success dikha deta tha)
+// Send the OTP email. If the email fails, in dev the OTP is printed in the console
+// and the response will say the email was not sent (earlier it silently showed success)
 const deliverOtp = async (email, otp, name, purpose = 'verify') => {
   const result = await sendOtpEmail(email, otp, name, purpose);
   if (!result.success && !isProd()) {
-    console.log(`🔑 OTP for ${email}: ${otp}   (email nahi gaya: ${result.hint})`);
+    console.log(`🔑 OTP for ${email}: ${otp}   (email not sent: ${result.hint})`);
   }
   return result;
 };
 
-// Response ke saath jode jaane wale OTP fields
+// OTP fields attached to the response
 const otpMeta = (result, otp) => {
   const meta = { emailSent: result.success };
   if (!result.success) {
     if (!isProd()) meta.emailError = result.hint;
-    if (isDev()) meta.devOtp = otp; // SIRF development mein, production mein kabhi nahi
+    if (isDev()) meta.devOtp = otp; // ONLY in development, never in production
   }
   return meta;
 };
@@ -88,7 +88,7 @@ router.post('/register', async (req, res) => {
     }
 
     if (user) {
-      // Pehle register kiya tha par verify nahi - details update karke naya OTP
+      // Registered earlier but not verified - update the details and send a new OTP
       user.name = String(name).trim();
       user.city = city?.trim() || '';
       user.password = password;
@@ -144,7 +144,7 @@ router.post('/verify-otp', async (req, res) => {
 
     const result = user.verifyOtp(String(otp).trim());
     if (!result.valid) {
-      await user.save(); // attempts update karo
+      await user.save(); // update attempts
       return res.status(400).json({ success: false, message: result.message });
     }
 
@@ -185,7 +185,7 @@ router.post('/resend-otp', async (req, res) => {
       });
     }
 
-    // Spam rokne ke liye 25 sec cooldown
+    // 25 sec cooldown to prevent spam
     if (user.otp?.sentAt && Date.now() - new Date(user.otp.sentAt).getTime() < 25 * 1000) {
       return res.status(429).json({
         success: false,
@@ -229,7 +229,7 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }
 
-    // Pehle password check (pehle OTP bhej deta tha bina password dekhe = spam ho sakta tha)
+    // Check the password first (earlier it sent the OTP without checking the password = could cause spam)
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       return res.status(401).json({ success: false, message: 'Invalid email or password' });
@@ -264,8 +264,8 @@ router.post('/login', async (req, res) => {
 });
 
 // ==================== FORGOT PASSWORD ====================
-// Reset token login token se alag hai: payload mein `id` nahi `uid` hai,
-// isliye isse protected routes (login) ka access nahi mil sakta.
+// The reset token is different from the login token: its payload has `uid`, not `id`,
+// so it cannot be used to access protected routes (login).
 const makeResetToken = (userId) =>
   jwt.sign({ uid: String(userId), purpose: 'password_reset' }, getJwtSecret(), {
     expiresIn: '10m',
@@ -295,7 +295,7 @@ router.post('/forgot-password', async (req, res) => {
       });
     }
 
-    // Spam rokne ke liye 25 sec cooldown
+    // 25 sec cooldown to prevent spam
     if (user.otp?.sentAt && Date.now() - new Date(user.otp.sentAt).getTime() < 25 * 1000) {
       return res.status(429).json({
         success: false,
@@ -322,7 +322,7 @@ router.post('/forgot-password', async (req, res) => {
   }
 });
 
-// Step 2: OTP verify -> chhota sa resetToken milega (10 min)
+// Step 2: Verify OTP -> you get a short-lived resetToken (10 min)
 // ==================== @POST /api/auth/verify-reset-otp ====================
 router.post('/verify-reset-otp', async (req, res) => {
   try {
@@ -338,7 +338,7 @@ router.post('/verify-reset-otp', async (req, res) => {
     }
 
     const result = user.verifyOtp(String(otp).trim());
-    await user.save(); // attempts / OTP clear save karo
+    await user.save(); // save the cleared attempts / OTP
     if (!result.valid) {
       return res.status(400).json({ success: false, message: result.message });
     }
@@ -354,7 +354,7 @@ router.post('/verify-reset-otp', async (req, res) => {
   }
 });
 
-// Step 3: naya password set karo
+// Step 3: Set the new password
 // ==================== @POST /api/auth/reset-password ====================
 router.post('/reset-password', async (req, res) => {
   try {
@@ -392,7 +392,7 @@ router.post('/reset-password', async (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid reset token.' });
     }
 
-    user.password = String(newPassword); // pre-save hook hash kar dega
+    user.password = String(newPassword); // the pre-save hook will hash it
     await user.save();
 
     res.status(200).json({

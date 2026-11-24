@@ -2,9 +2,9 @@
 // Notifications Routes — UPDATED
 // routes/notifications.js
 //
-// Purani routes same hain.
-// NAYA route: POST /api/notifications/fcm-token
-//   → Flutter app apna FCM token yahan register/update karta hai
+// The old routes are the same.
+// NEW route: POST /api/notifications/fcm-token
+//   → The Flutter app registers/updates its FCM token here
 // ============================================================
 
 const express = require('express');
@@ -18,11 +18,11 @@ const fail = (res, status, message) =>
   res.status(status).json({ success: false, message });
 
 // ==================== @POST /api/notifications/fcm-token ====================
-// Flutter app apna FCM token yahan save karta hai.
-// Kab call karo:
-//   - App open hone par (main.dart ya dashboard initState)
-//   - Login ke baad
-//   - FirebaseMessaging.instance.onTokenRefresh stream mein
+// The Flutter app saves its FCM token here.
+// When to call:
+//   - When the app opens (main.dart or dashboard initState)
+//   - After login
+//   - In the FirebaseMessaging.instance.onTokenRefresh stream
 // body: { token: "FCM_TOKEN_STRING" }
 
 router.post('/fcm-token', protect, async (req, res) => {
@@ -47,7 +47,7 @@ router.post('/fcm-token', protect, async (req, res) => {
 });
 
 // ==================== @DELETE /api/notifications/fcm-token ====================
-// Logout par token clear karo taaki push na aaye
+// Clear the token on logout so that no push arrives
 
 router.delete('/fcm-token', protect, async (req, res) => {
   try {
@@ -59,7 +59,7 @@ router.delete('/fcm-token', protect, async (req, res) => {
 });
 
 // ==================== @GET /api/notifications ====================
-// User ke sare notifications (newest first)
+// All notifications of the user (newest first)
 // ?page=1&limit=20&unreadOnly=true
 
 router.get('/', protect, async (req, res) => {
@@ -104,7 +104,7 @@ router.get('/', protect, async (req, res) => {
 });
 
 // ==================== @POST /api/notifications/read-all ====================
-// Sab notifications read mark karo
+// Mark all notifications as read
 
 router.post('/read-all', protect, async (req, res) => {
   try {
@@ -119,7 +119,7 @@ router.post('/read-all', protect, async (req, res) => {
 });
 
 // ==================== @POST /api/notifications/:id/read ====================
-// Ek notification read mark karo
+// Mark one notification as read
 
 router.post('/:id/read', protect, async (req, res) => {
   try {
@@ -134,7 +134,7 @@ router.post('/:id/read', protect, async (req, res) => {
 });
 
 // ==================== @DELETE /api/notifications/clear ====================
-// Sab read notifications delete karo
+// Delete all read notifications
 
 router.delete('/clear', protect, async (req, res) => {
   try {

@@ -6,14 +6,14 @@ import '../services/auth_service.dart';
 import 'login_screen.dart';
 import 'dashboard_screen.dart';
 
-/// 10 second ka kite intro (sunset sky, udti patangein, logo reveal).
-/// Koi video file / extra package nahi chahiye - pure Flutter animation hai.
-/// Top-right "Skip" se kabhi bhi aage ja sakte ho.
-/// Intro ke baad: token hai -> Dashboard, warna -> Login.
-/// (Login ke baad Team screen aati hai, uska Skip -> Dashboard.)
+/// A 10-second kite intro (sunset sky, flying kites, logo reveal).
+/// No video file / extra package needed - it is a pure Flutter animation.
+/// You can move ahead at any time with the top-right "Skip".
+/// After the intro: if there is a token -> Dashboard, otherwise -> Login.
+/// (After login the Team screen comes, its Skip -> Dashboard.)
 class SplashScreen extends StatefulWidget {
-  /// App ready hone par (login check ke baad) yeh callback call hota hai
-  /// — deep link pending invite handle karne ke liye main.dart use karta hai
+  /// This callback is called when the app is ready (after the login check)
+  /// — main.dart uses it to handle a deep-link pending invite
   final VoidCallback? onReady;
   const SplashScreen({super.key, this.onReady});
 
@@ -48,7 +48,7 @@ class _SplashScreenState extends State<SplashScreen>
     final loggedIn = await _loggedInFuture;
     if (!mounted) return;
 
-    // Aage ki screens light hain -> status bar icons dark
+    // The following screens are light -> status bar icons dark
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
@@ -67,7 +67,7 @@ class _SplashScreenState extends State<SplashScreen>
       ),
     );
 
-    // Deep link pending invite ke liye callback
+    // Callback for a deep-link pending invite
     widget.onReady?.call();
   }
 
@@ -77,7 +77,7 @@ class _SplashScreenState extends State<SplashScreen>
     super.dispose();
   }
 
-  // t ke ek hisse (a..b) ka progress 0..1
+  // progress 0..1 of a portion (a..b) of t
   double _p(double a, double b, [Curve curve = Curves.easeOut]) =>
       Interval(a, b, curve: curve).transform(_c.value);
 
@@ -215,7 +215,7 @@ class _SplashScreenState extends State<SplashScreen>
               Opacity(
                 opacity: subP.clamp(0.0, 1.0),
                 child: const Text(
-                  'गुलाबी चरखी • Kite Battle Arena',
+                  'Pink Spool • Kite Battle Arena',
                   style: TextStyle(color: Colors.white70, fontSize: 14),
                 ),
               ),
@@ -248,7 +248,7 @@ class _SplashScreenState extends State<SplashScreen>
           ),
         ),
 
-        // Start: black se fade-in, End: pink pe fade-out
+        // Start: fade-in from black, End: fade-out to pink
         if (fadeIn > 0) Container(color: Colors.black.withValues(alpha: fadeIn)),
         if (fadeOut > 0)
           Container(color: AppColors.bgPink.withValues(alpha: fadeOut.clamp(0.0, 1.0))),
@@ -261,8 +261,8 @@ class _SplashScreenState extends State<SplashScreen>
 // Sky + kites painter
 // ======================================================================
 class _Kite {
-  final double x, y; // base position (screen ka fraction)
-  final double size; // width ka fraction
+  final double x, y; // base position (fraction of the screen)
+  final double size; // fraction of the width
   final Color c1, c2;
   final double phase, amp, anchorX;
   const _Kite(this.x, this.y, this.size, this.c1, this.c2, this.phase, this.amp,
@@ -320,7 +320,7 @@ class _SkyPainter extends CustomPainter {
       canvas.drawCircle(Offset(_stars[i].dx * w, _stars[i].dy * h), 1.2, starPaint);
     }
 
-    // ---- Sun (dheere upar aata hai) ----
+    // ---- Sun (slowly rises) ----
     final sunC = Offset(w * 0.5, h * (0.88 - 0.10 * t));
     final sunR = w * 0.36;
     canvas.drawCircle(
@@ -372,13 +372,13 @@ class _SkyPainter extends CustomPainter {
     final w = size.width, h = size.height;
     final s = w * k.size;
 
-    // Position - halka sa lehrata hua + dheere upar uthta hua
+    // Position - gently waving + slowly rising
     final cx = (k.x + math.sin(t * math.pi * 4 + k.phase) * k.amp) * w;
     final cy =
         (k.y + math.cos(t * math.pi * 3 + k.phase) * k.amp * 0.6 - t * 0.03) * h;
     final angle = math.sin(t * math.pi * 6 + k.phase) * 0.22;
 
-    // Bottom point (world coords) - string yahin se shuru
+    // Bottom point (world coords) - the string starts here
     final bx = cx - math.sin(angle) * s * 0.8;
     final by = cy + math.cos(angle) * s * 0.8;
 
@@ -455,5 +455,5 @@ class _SkyPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _SkyPainter old) => false; // repaint controller se hota hai
+  bool shouldRepaint(covariant _SkyPainter old) => false; // repaint is driven by the controller
 }

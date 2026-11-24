@@ -2,8 +2,8 @@ const mongoose = require('mongoose');
 
 // ============================================================
 // Tournament Model
-// Association wale sanctioned tournaments create karte hain
-// App mein: Association tab > Sanctioned Tournaments list
+// Associations create sanctioned tournaments
+// In the app: Association tab > Sanctioned Tournaments list
 // Status: registrations_open | invite_only | waitlist | closed | ongoing | finished
 // ============================================================
 
@@ -17,13 +17,13 @@ const TournamentSchema = new mongoose.Schema({
   venue: { type: String, trim: true, maxlength: 100, default: '' },
   area:  { type: String, trim: true, maxlength: 100, default: '' }, // e.g. "Amer Road"
 
-  // GPS (Matches near you / distance filter ke liye)
+  // GPS (for Matches near you / distance filter)
   location: {
     type: { type: String, enum: ['Point'], default: 'Point' },
     coordinates: { type: [Number], default: [0, 0] }, // [lng, lat]
   },
 
-  // Registration status badge (app mein dikhega)
+  // Registration status badge (shown in the app)
   registrationStatus: {
     type: String,
     enum: ['registrations_open', 'invite_only', 'waitlist', 'closed'],

@@ -148,7 +148,7 @@ class GradientButton extends StatelessWidget {
 
 
 // ------------------------------------------------------------------
-// Gulabi Charkhi "G" logo (screenshots wala: beech mein G, dono side line)
+// Gulabi Charkhi "G" logo (as in the screenshots: G in the middle, a line on both sides)
 // ------------------------------------------------------------------
 class GulabiLogo extends StatelessWidget {
   final double size;

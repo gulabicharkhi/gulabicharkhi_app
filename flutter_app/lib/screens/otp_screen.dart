@@ -9,11 +9,11 @@ import 'reset_password_screen.dart';
 
 class OtpScreen extends StatefulWidget {
   final String email;
-  final bool emailSent; // false => backend email bhej nahi paya
-  final String? emailError; // reason (sirf dev mein aata hai)
-  final String? devOtp; // sirf NODE_ENV=development mein, jab email fail ho
+  final bool emailSent; // false => the backend could not send the email
+  final String? emailError; // reason (only comes in dev)
+  final String? devOtp; // only in NODE_ENV=development, when the email fails
 
-  /// true => Forgot Password flow (OTP ke baad Reset Password screen)
+  /// true => Forgot Password flow (Reset Password screen after OTP)
   final bool isReset;
   const OtpScreen({
     super.key,
@@ -30,7 +30,7 @@ class OtpScreen extends StatefulWidget {
 
 class _OtpScreenState extends State<OtpScreen>
     with SingleTickerProviderStateMixin {
-  // 6 OTP boxes ke liye 6 controllers
+  // 6 controllers for the 6 OTP boxes
   final List<TextEditingController> _controllers =
       List.generate(6, (_) => TextEditingController());
   final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
@@ -94,7 +94,7 @@ class _OtpScreenState extends State<OtpScreen>
 
   String get _otp => _controllers.map((c) => c.text).join();
 
-  // Paste / autofill ke liye: digits ko index se aage ke boxes mein bhar do
+  // For paste / autofill: fill the digits into the boxes from the index onward
   void _fillFrom(int index, String digits) {
     final clean = digits.replaceAll(RegExp(r'\D'), '');
     if (clean.isEmpty) return;
@@ -130,7 +130,7 @@ class _OtpScreenState extends State<OtpScreen>
     setState(() => _isLoading = false);
 
     if (result['success'] == true && widget.isReset) {
-      // Forgot password: OTP sahi -> naya password set karne wali screen
+      // Forgot password: OTP correct -> the screen to set a new password
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -141,13 +141,13 @@ class _OtpScreenState extends State<OtpScreen>
         ),
       );
     } else if (result['success'] == true) {
-      // OTP sahi -> pehle Login screen (email pehle se bhara hua)
+      // OTP correct -> go to the Login screen first (email pre-filled)
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
           builder: (_) => LoginScreen(
             prefillEmail: widget.email,
-            infoMessage: 'Email verified! Ab login karo.',
+            infoMessage: 'Email verified! Now log in.',
           ),
         ),
         (route) => false,
@@ -422,7 +422,7 @@ class _OtpScreenState extends State<OtpScreen>
     );
   }
 
-  // Email na jaane par warning (dev mein OTP tap karke autofill bhi ho jata hai)
+  // Warning if the email was not sent (in dev, you can also tap the OTP to autofill)
   Widget _buildEmailWarning() {
     return Container(
       width: double.infinity,
@@ -494,7 +494,7 @@ class _OtpScreenState extends State<OtpScreen>
     return SizedBox(
       width: 46,
       height: 56,
-      // Backspace par pichle box par jao (stable Focus widget, har build par naya FocusNode nahi)
+      // On backspace go to the previous box (stable Focus widget, no new FocusNode on every build)
       child: Focus(
         onKeyEvent: (node, event) {
           if (event is KeyDownEvent &&
@@ -544,18 +544,18 @@ class _OtpScreenState extends State<OtpScreen>
               return;
             }
             if (value.length >= 3) {
-              // Paste (poora code)
+              // Paste (the full code)
               _fillFrom(index, value);
               return;
             }
-            // Naya digit (agar box mein pehle se digit tha to 2 chars aate hain -> last wala lo)
+            // New digit (if the box already had a digit, 2 chars arrive -> take the last one)
             _controllers[index].text = value[value.length - 1];
             setState(() {});
             if (index < 5) {
               _focusNodes[index + 1].requestFocus();
             } else {
               _focusNodes[index].unfocus();
-              _verifyOtp(); // last digit par auto-verify
+              _verifyOtp(); // auto-verify on the last digit
             }
           },
         ),

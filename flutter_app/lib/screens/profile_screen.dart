@@ -5,9 +5,9 @@ import 'package:image_picker/image_picker.dart';
 import '../utils/app_theme.dart';
 import '../services/auth_service.dart';
 
-/// Profile screen - Screenshot ke mutabik:
+/// Profile screen - as per the screenshot:
 /// - Gradient header with profile photo (camera button)
-/// - Welcome banner (pehli baar)
+/// - Welcome banner (first time)
 /// - Player name, Location, Date of birth, Email, Mobile
 /// - Update button
 /// - Active sessions section
@@ -467,7 +467,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             label: 'Email address',
             controller: _emailCtr,
             hint: 'your@email.com',
-            readOnly: true, // email change allowed nahi
+            readOnly: true, // email change is not allowed
             enabled: false,
           ),
           const SizedBox(height: 16),

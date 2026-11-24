@@ -4,8 +4,8 @@ import '../utils/app_theme.dart';
 import '../services/team_service.dart';
 import '../widgets/team_widgets.dart';
 
-/// Create Team screen. [existing] dene par ye "Edit team" ban jata hai (sirf captain).
-/// Success par pop hota hai team map ke saath.
+/// Create Team screen. When [existing] is given, this becomes "Edit team" (captain only).
+/// On success it pops with the team map.
 class CreateTeamScreen extends StatefulWidget {
   final Map<String, dynamic>? existing;
   const CreateTeamScreen({super.key, this.existing});

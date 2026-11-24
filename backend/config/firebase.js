@@ -17,7 +17,7 @@ function initFirebase() {
   try {
     let serviceAccount;
 
-    // Option A: JSON directly in env (Render / Railway / Heroku deploy ke liye best)
+    // Option A: JSON directly in env (best for Render / Railway / Heroku deployment)
     if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
       serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
     }
@@ -26,7 +26,7 @@ function initFirebase() {
       const filePath = path.resolve(process.env.FIREBASE_SERVICE_ACCOUNT_PATH);
       serviceAccount = JSON.parse(fs.readFileSync(filePath, 'utf8'));
     }
-    // Option C: Default path (backend/ folder mein rakha ho)
+    // Option C: Default path (kept in the backend/ folder)
     else {
       const defaultPath = path.join(__dirname, '..', 'firebase-service-account.json');
       if (fs.existsSync(defaultPath)) {
@@ -35,8 +35,8 @@ function initFirebase() {
     }
 
     if (!serviceAccount) {
-      console.warn('⚠️  Firebase: Service account nahi mila. Push notifications DISABLED rahenge.');
-      console.warn('   Setup ke liye: docs/FIREBASE_SETUP.md dekho');
+      console.warn('⚠️  Firebase: Service account not found. Push notifications will be DISABLED.');
+      console.warn('   For setup, see docs/FIREBASE_SETUP.md');
       return null;
     }
 
@@ -56,14 +56,14 @@ function initFirebase() {
   }
 }
 
-// Messaging instance lazily get karo
+// Get the messaging instance lazily
 function getMessaging() {
   if (_initialized) return _messaging;
   return initFirebase();
 }
 
 // ============================================================
-// Push notification bhejo (single token)
+// Send a push notification (single token)
 // Returns: { success: true } | { success: false, error }
 // ============================================================
 async function sendPush(fcmToken, { title, body, data = {} }) {
@@ -98,7 +98,7 @@ async function sendPush(fcmToken, { title, body, data = {} }) {
     await messaging.send(message);
     return { success: true };
   } catch (err) {
-    // Invalid token ho to silently ignore (user ne app uninstall kiya hoga)
+    // Silently ignore an invalid token (the user has probably uninstalled the app)
     if (err.code === 'messaging/registration-token-not-registered' ||
         err.code === 'messaging/invalid-registration-token') {
       return { success: false, error: 'invalid_token', code: err.code };
@@ -110,7 +110,7 @@ async function sendPush(fcmToken, { title, body, data = {} }) {
 
 // ============================================================
 // Multicast push (many tokens at once — max 500 per call)
-// Invalid tokens ko automatically clean karta hai
+// Automatically cleans up invalid tokens
 // ============================================================
 async function sendMulticastPush(fcmTokens, { title, body, data = {} }, { cleanupFn } = {}) {
   const messaging = getMessaging();
@@ -148,7 +148,7 @@ async function sendMulticastPush(fcmTokens, { title, body, data = {} }, { cleanu
       const response = await messaging.sendEachForMulticast(message);
       totalSent += response.successCount;
 
-      // Invalid tokens collect karo
+      // Collect invalid tokens
       response.responses.forEach((r, idx) => {
         if (!r.success) {
           const code = r.error?.code || '';
@@ -163,7 +163,7 @@ async function sendMulticastPush(fcmTokens, { title, body, data = {} }, { cleanu
     }
   }
 
-  // Invalid tokens DB se remove karo (agar cleanup function diya ho)
+  // Remove invalid tokens from the DB (if a cleanup function was provided)
   if (invalidTokens.length && cleanupFn) {
     try { await cleanupFn(invalidTokens); } catch (e) { /* silent */ }
   }

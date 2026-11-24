@@ -7,10 +7,10 @@ import 'otp_screen.dart';
 import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  /// OTP verify ke baad aane par email pehle se bhara hua aata hai
+  /// When arriving after OTP verification, the email comes pre-filled
   final String? prefillEmail;
 
-  /// OTP verify ke baad "Email verified, ab login karo" message
+  /// "Email verified, now log in" message after OTP verification
   final String? infoMessage;
 
   const LoginScreen({super.key, this.prefillEmail, this.infoMessage});
@@ -74,7 +74,7 @@ class _LoginScreenState extends State<LoginScreen> {
         (route) => false,
       );
     } else if (result['requiresVerification'] == true) {
-      // Email verify nahi hua tha -> OTP screen par bhejo
+      // Email was not verified -> send to the OTP screen
       _showError(result['message'] ?? 'Please verify your email');
       Navigator.push(
         context,

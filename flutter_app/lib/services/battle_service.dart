@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
 
-/// Matches (battles) + leaderboard ke GET calls.
+/// GET calls for Matches (battles) + leaderboard.
 class BattleService {
   static const _timeout = Duration(seconds: 60);
 
@@ -32,16 +32,16 @@ class BattleService {
       if (decoded is Map) return Map<String, dynamic>.from(decoded);
       return {'success': false, 'message': 'Unexpected server response (${res.statusCode})'};
     } on TimeoutException {
-      return {'success': false, 'message': 'Server ne response nahi diya. Internet / backend check karo.'};
+      return {'success': false, 'message': 'The server did not respond. Check the internet / backend.'};
     } catch (_) {
       return {
         'success': false,
-        'message': 'Server se connect nahi ho paya. Backend chal raha hai? (${AuthService.baseUrl})',
+        'message': 'Could not connect to the server. Is the backend running? (${AuthService.baseUrl})',
       };
     }
   }
 
-  /// status: all | live | upcoming | final. city khaali ho to saari cities.
+  /// status: all | live | upcoming | final. If city is empty, all cities.
   static Future<Map<String, dynamic>> nearby({
     String city = '',
     String status = 'all',
@@ -64,10 +64,10 @@ class BattleService {
 
   // ==================== Battle flow (captain actions) ====================
 
-  /// Arena: incoming / outgoing challenges, active battles, challenge ke liye ready teams.
+  /// Arena: incoming / outgoing challenges, active battles, teams ready to be challenged.
   static Future<Map<String, dynamic>> arena() => _get('/battles/arena');
 
-  /// Challenge bhejo — venue, area, scheduledAt optional.
+  /// Send a challenge — venue, area, scheduledAt optional.
   static Future<Map<String, dynamic>> challenge({
     required String opponentTeamId,
     String venue = '',
@@ -86,17 +86,22 @@ class BattleService {
   static Future<Map<String, dynamic>> accept(String id) => _post('/battles/${_id(id)}/accept');
   static Future<Map<String, dynamic>> cancel(String id) => _post('/battles/${_id(id)}/cancel');
 
-  /// Opponent captain incoming challenge reject karta hai — challenger ko notify hoga
+  /// The opponent captain rejects an incoming challenge — the challenger will be notified
   static Future<Map<String, dynamic>> reject(String id, {String reason = ''}) =>
       _post('/battles/${_id(id)}/reject', {
         if (reason.trim().isNotEmpty) 'reason': reason.trim(),
       });
 
-  /// "Start battle" - dono captains dabayen to match LIVE ho jata hai.
+  /// "Start battle" - when both captains press it, the match goes LIVE.
   static Future<Map<String, dynamic>> ready(String id) => _post('/battles/${_id(id)}/ready');
 
-  static Future<Map<String, dynamic>> claimCut(String id, {String? cutPlayerId}) =>
-      _post('/battles/${_id(id)}/claim-cut', {if (cutPlayerId != null) 'cutPlayerId': cutPlayerId});
+  /// Cut / bout claim: winnerIds = players of our team who won, loserIds = players of the opposing team who lost.
+  static Future<Map<String, dynamic>> claimCut(String id,
+          {required List<String> winnerIds, required List<String> loserIds}) =>
+      _post('/battles/${_id(id)}/claim-cut', {
+        'winnerPlayerIds': winnerIds,
+        'loserPlayerIds': loserIds,
+      });
 
   static Future<Map<String, dynamic>> respondCut(String id, String cutId,
           {required bool approve, String reason = ''}) =>

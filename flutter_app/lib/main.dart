@@ -9,11 +9,11 @@ import 'services/team_service.dart';
 import 'services/notification_service.dart';
 import 'utils/app_theme.dart';
 
-// Deep link handling ke liye app_links package use karo:
-// pubspec.yaml mein add karo:
+// Use the app_links package for deep link handling:
+// Add to pubspec.yaml:
 //   app_links: ^6.3.2
 
-// pubspec.yaml mein ye bhi add karo (FCM ke liye):
+// Also add this to pubspec.yaml (for FCM):
 //   firebase_core: ^3.6.0
 //   firebase_messaging: ^15.1.3
 //   flutter_local_notifications: ^18.0.1
@@ -33,12 +33,12 @@ Future<void> main() async {
     ),
   );
 
-  // Firebase initialize karo
+  // Initialize Firebase
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // FCM + local notifications setup karo
+  // Set up FCM + local notifications
   await NotificationService.init();
 
   runApp(const GulabiCharkhiApp());
@@ -55,7 +55,7 @@ class _GulabiCharkhiAppState extends State<GulabiCharkhiApp> {
   final _navKey = GlobalKey<NavigatorState>();
   StreamSubscription? _linkSub;
 
-  // Pending invite code — agar app band tha aur link se khula
+  // Pending invite code — if the app was closed and opened via a link
   String? _pendingInviteCode;
 
   @override
@@ -71,7 +71,7 @@ class _GulabiCharkhiAppState extends State<GulabiCharkhiApp> {
     super.dispose();
   }
 
-  // ── FCM notification tap → screen pe navigate karo ───────────────────────
+  // ── FCM notification tap → navigate to the screen ───────────────────────
   void _setupFcmNavigation() {
     NotificationService.onTap = (data) {
       final refType = data['refType'] ?? '';
@@ -84,24 +84,24 @@ class _GulabiCharkhiAppState extends State<GulabiCharkhiApp> {
           builder: (_) => MatchDetailScreen(matchId: refId),
         ));
       }
-      // Aur types add kar sakte ho:
+      // You can add more types:
       // else if (refType == 'Team') { ... }
       // else if (refType == 'Tournament') { ... }
     };
   }
 
   Future<void> _initDeepLinks() async {
-    // ── app_links package uncomment karo jab install kar lo ──────────────
+    // ── uncomment the app_links package once it is installed ──────────────
     //
     // final appLinks = AppLinks();
     //
-    // // App band tha, link se khula (cold start)
+    // // The app was closed, opened via a link (cold start)
     // try {
     //   final uri = await appLinks.getInitialLink();
     //   if (uri != null) _handleLink(uri);
     // } catch (_) {}
     //
-    // // App pehle se chalu hai, link aaya (warm start)
+    // // The app is already running, a link arrived (warm start)
     // _linkSub = appLinks.uriLinkStream.listen(
     //   _handleLink,
     //   onError: (_) {},
@@ -109,7 +109,7 @@ class _GulabiCharkhiAppState extends State<GulabiCharkhiApp> {
   }
 
   void _handleLink(Uri uri) {
-    // gulabicharkhi://join/RHVJWH  ya  https://domain.com/join/RHVJWH
+    // gulabicharkhi://join/RHVJWH  or  https://domain.com/join/RHVJWH
     final segments = uri.pathSegments;
     final joinIdx  = segments.indexOf('join');
     if (joinIdx == -1 || joinIdx + 1 >= segments.length) return;
@@ -117,10 +117,10 @@ class _GulabiCharkhiAppState extends State<GulabiCharkhiApp> {
     final code = segments[joinIdx + 1].toUpperCase().trim();
     if (code.isEmpty) return;
 
-    // Navigator ready hai?
+    // Is the Navigator ready?
     final nav = _navKey.currentState;
     if (nav == null) {
-      // Splash abhi chal rahi hai — store karo, baad mein handle hoga
+      // Splash is still running — store it, it will be handled later
       setState(() => _pendingInviteCode = code);
       return;
     }
@@ -133,8 +133,8 @@ class _GulabiCharkhiAppState extends State<GulabiCharkhiApp> {
     ));
   }
 
-  /// SplashScreen login ke baad yeh callback call karta hai —
-  /// tab pending invite check karo
+  /// SplashScreen calls this callback after login —
+  /// then check for a pending invite
   void _onAppReady() {
     final code = _pendingInviteCode;
     if (code == null) return;
@@ -157,8 +157,8 @@ class _GulabiCharkhiAppState extends State<GulabiCharkhiApp> {
 
 // ════════════════════════════════════════════════════════════════════════════
 // Invite Code Landing Screen
-// Jab koi /join/CODE link khole:
-//   → Team dhundo backend se
+// When someone opens a /join/CODE link:
+//   → Find the team from the backend
 //   → Confirm dialog → Join
 // ════════════════════════════════════════════════════════════════════════════
 class _InviteCodeLandingScreen extends StatefulWidget {
@@ -207,7 +207,7 @@ class _InviteCodeLandingScreenState extends State<_InviteCodeLandingScreen> {
 
     final ok = res['success'] == true;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text((res['message'] ?? (ok ? 'Team join ho gayi!' : 'Join nahi hua')).toString()),
+      content: Text((res['message'] ?? (ok ? 'Team joined!' : 'Could not join')).toString()),
       backgroundColor: ok ? const Color(0xFF15803D) : Colors.redAccent,
       behavior: SnackBarBehavior.floating,
     ));
@@ -369,7 +369,7 @@ class _InviteCodeLandingScreenState extends State<_InviteCodeLandingScreen> {
               borderRadius: BorderRadius.circular(14),
             ),
             alignment: Alignment.center,
-            child: const Text('Team full hai',
+            child: const Text('Team is full',
                 style: TextStyle(color: Color(0xFF999999),
                     fontWeight: FontWeight.w700, fontSize: 15)),
           ),
@@ -394,11 +394,11 @@ class _InviteCodeLandingScreenState extends State<_InviteCodeLandingScreen> {
       child: Column(children: [
         const Icon(Icons.link_off_rounded, size: 56, color: Color(0xFFCCCCCC)),
         const SizedBox(height: 14),
-        const Text('Link kaam nahi kiya',
+        const Text('The link did not work',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF1A1A1A))),
         const SizedBox(height: 8),
         Text(
-          _error ?? 'Invite code galat ya expire ho gaya.',
+          _error ?? 'The invite code is wrong or has expired.',
           textAlign: TextAlign.center,
           style: const TextStyle(fontSize: 13.5, color: Color(0xFF888888), height: 1.4),
         ),
@@ -412,14 +412,14 @@ class _InviteCodeLandingScreenState extends State<_InviteCodeLandingScreen> {
               borderRadius: BorderRadius.circular(14),
             ),
             alignment: Alignment.center,
-            child: const Text('Dobara try karo',
+            child: const Text('Try again',
                 style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
           ),
         ),
         const SizedBox(height: 8),
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Wapas jaao', style: TextStyle(color: Color(0xFF999999))),
+          child: const Text('Go back', style: TextStyle(color: Color(0xFF999999))),
         ),
       ]),
     );

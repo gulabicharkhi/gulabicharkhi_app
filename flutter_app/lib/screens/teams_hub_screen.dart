@@ -7,11 +7,11 @@ import 'join_team_screen.dart';
 import 'team_detail_screen.dart';
 
 /// "Teams" screen: Join / Create cards + MY TEAMS list.
-/// Dashboard ke Teams tab mein embed hota hai (showBack: false).
+/// Embedded in the Dashboard Teams tab (showBack: false).
 class TeamsHubScreen extends StatefulWidget {
   final bool showBack;
-  final double bottomPadding; // dashboard ke bottom nav ke liye jagah
-  final VoidCallback? onChanged; // team join / create / leave hone par
+  final double bottomPadding; // space for the dashboard bottom nav
+  final VoidCallback? onChanged; // when a team is joined / created / left
 
   const TeamsHubScreen({
     super.key,
@@ -76,7 +76,7 @@ class _TeamsHubScreenState extends State<TeamsHubScreen> {
                 padding: EdgeInsets.fromLTRB(16, 6, 16, widget.bottomPadding),
                 children: [
                   const SectionLabel('Get started'),
-                  // Ek user ek hi team mein ho sakta hai - team hai to ye cards disable
+                  // A user can be in only one team - if they have a team, these cards are disabled
                   _actionCard(
                     filled: false,
                     icon: Icons.person_add_alt_1_rounded,

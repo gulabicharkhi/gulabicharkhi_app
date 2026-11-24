@@ -47,7 +47,7 @@ router.get('/:id', protect, wrap('Association detail', async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 400, 'Invalid id');
 
   const assoc = await Association.findById(req.params.id)
-    .select('-members'); // members list private hai
+    .select('-members'); // members list is private
   if (!assoc) return fail(res, 404, 'Association not found.');
 
   res.status(200).json({
@@ -68,13 +68,13 @@ router.get('/:id', protect, wrap('Association detail', async (req, res) => {
 }));
 
 // ==================== @GET /api/associations/page/home ====================
-// Association Tab home - user ka standing + all associations + rule book sections
-// App mein: "YOUR STANDING" + "AFFILIATED ASSOCIATIONS" + "OFFICIAL RULE BOOK"
+// Association Tab home - the user's standing + all associations + rule book sections
+// In the app: "YOUR STANDING" + "AFFILIATED ASSOCIATIONS" + "OFFICIAL RULE BOOK"
 router.get('/page/home', protect, wrap('Association home', async (req, res) => {
   const user = await User.findById(req.user._id).select('name federationId city');
 
-  // Rule book - pehli association se ya hardcoded sections
-  // Production mein: DB se lo
+  // Rule book - from the first association or hardcoded sections
+  // In production: fetch from the DB
   const ruleBook = [
     { title: 'Match length & winning',      content: '' },
     { title: 'Approved kites & strings',    content: '' },
@@ -186,7 +186,7 @@ router.get('/tournaments/all', protect, wrap('All tournaments', async (req, res)
 }));
 
 // ==================== @POST /api/associations/tournaments/:id/register ====================
-// Team tournament ke liye register karti hai
+// A team registers for a tournament
 router.post('/tournaments/:id/register', protect, wrap('Tournament register', async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 400, 'Invalid tournament id');
 

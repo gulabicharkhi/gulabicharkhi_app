@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
 
-/// Teams ke saare backend calls (/api/teams/...).
-/// Base URL aur token AuthService se hi aate hain.
+/// All backend calls for Teams (/api/teams/...).
+/// The base URL and token come from AuthService.
 class TeamService {
   static const _timeout = Duration(seconds: 60);
 
@@ -42,16 +42,16 @@ class TeamService {
       } catch (_) {}
       return {'success': false, 'message': 'Unexpected server response (${res.statusCode})'};
     } on TimeoutException {
-      return {'success': false, 'message': 'Server ne response nahi diya. Internet / backend check karo.'};
+      return {'success': false, 'message': 'The server did not respond. Check the internet / backend.'};
     } catch (_) {
       return {
         'success': false,
-        'message': 'Server se connect nahi ho paya. Backend chal raha hai? (${AuthService.baseUrl})',
+        'message': 'Could not connect to the server. Is the backend running? (${AuthService.baseUrl})',
       };
     }
   }
 
-  // Team badalne ke baad local user (dashboard wala team) update karo
+  // After the team changes, update the local user (the dashboard team)
   static Future<Map<String, dynamic>> _sync(Map<String, dynamic> res) async {
     if (res['success'] == true) await AuthService.refreshMe();
     return res;
@@ -90,7 +90,7 @@ class TeamService {
   static Future<Map<String, dynamic>> findByCode(String code) =>
       _send('GET', '/teams/code/${Uri.encodeComponent(code.trim())}');
 
-  /// inviteCode => turant join. teamId => public team par request (ya join, backend flag ke hisaab se)
+  /// inviteCode => join immediately. teamId => request on a public team (or join, depending on the backend flag)
   static Future<Map<String, dynamic>> join({String? inviteCode, String? teamId}) async =>
       _sync(await _send('POST', '/teams/join', body: {
         if (inviteCode != null) 'inviteCode': inviteCode,

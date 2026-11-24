@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
-/// Patang udaane ke liye mausam kaisa hai
+/// How the weather is for flying kites
 enum KiteLevel { great, okay, poor, danger }
 
 class DayForecast {
@@ -34,7 +34,7 @@ class WeatherInfo {
   final double precipitation; // mm
   final int code;
   final bool isDay;
-  final List<DayForecast> daily; // aaj se shuru
+  final List<DayForecast> daily; // starting from today
   final DateTime fetchedAt;
 
   const WeatherInfo({
@@ -73,26 +73,26 @@ class WeatherInfo {
       case KiteLevel.great:
         return 'Perfect for kite flying';
       case KiteLevel.okay:
-        return 'Chalega, thoda mushkil';
+        return 'Possible, but a bit difficult';
       case KiteLevel.poor:
-        return 'Kite ke liye theek nahi';
+        return 'Not good for kites';
       case KiteLevel.danger:
-        return 'Aaj patang mat udao';
+        return 'Do not fly kites today';
     }
   }
 
   String get kiteTip {
-    if (_stormy) return 'Bijli / toofan ka khatra hai. Khule me patang udana safe nahi.';
-    if (windSpeed >= 40 || windGust >= 55) return 'Hawa bahut tez hai, manjha aur patang dono control se bahar ho sakte hain.';
-    if (_rainy) return 'Baarish me patang aur manjha gila ho jata hai. Match baad me rakho.';
-    if (windSpeed < 5) return 'Hawa bahut halki hai, patang uthegi hi nahi.';
-    if (windSpeed >= 30) return 'Hawa tez hai. Sirf experienced players, moti dor ke saath.';
-    if (windSpeed < 10) return 'Hawa halki hai. Halki patang aur patli dor use karo.';
-    if (windSpeed >= 25) return 'Hawa kaafi tez hai. Pecha lagate time dor sambhal ke.';
-    return 'Hawa ekdum sahi hai. Pecha lagane ke liye best time!';
+    if (_stormy) return 'There is a risk of lightning / storm. It is not safe to fly kites in the open.';
+    if (windSpeed >= 40 || windGust >= 55) return 'The wind is very strong, both the manjha and the kite can go out of control.';
+    if (_rainy) return 'In rain the kite and manjha get wet. Hold the match later.';
+    if (windSpeed < 5) return 'The wind is very light, the kite will not even lift.';
+    if (windSpeed >= 30) return 'The wind is strong. Only experienced players, with thick string.';
+    if (windSpeed < 10) return 'The wind is light. Use a light kite and thin string.';
+    if (windSpeed >= 25) return 'The wind is quite strong. Handle the string carefully while engaging.';
+    return 'The wind is just right. Best time for a kite fight!';
   }
 
-  /// 0-100 bar ke liye
+  /// For the 0-100 bar
   double get kiteScore {
     switch (kiteLevel) {
       case KiteLevel.great:
@@ -127,17 +127,17 @@ class WeatherException implements Exception {
   String toString() => message;
 }
 
-/// Open-Meteo (free, API key nahi chahiye): geocoding + current weather.
-/// Same city ka result 10 minute cache hota hai.
+/// Open-Meteo (free, no API key needed): geocoding + current weather.
+/// The result for the same city is cached for 10 minutes.
 class WeatherService {
   static const _timeout = Duration(seconds: 12);
   static const _cacheFor = Duration(minutes: 10);
   static final Map<String, WeatherInfo> _cache = {};
 
   static Future<WeatherInfo> forCity(String rawCity, {bool force = false}) async {
-    // "Jaipur, Rajasthan" jaisa likha ho to pehla hissa hi city hai
+    // If written like "Jaipur, Rajasthan", the first part is the city
     final city = rawCity.split(',').first.trim();
-    if (city.isEmpty) throw WeatherException('City set nahi hai.');
+    if (city.isEmpty) throw WeatherException('City is not set.');
 
     final key = city.toLowerCase();
     final cached = _cache[key];
@@ -154,11 +154,11 @@ class WeatherService {
         'format': 'json',
       });
       final geoRes = await http.get(geoUri).timeout(_timeout);
-      if (geoRes.statusCode != 200) throw WeatherException('Location nahi mili. Baad me try karo.');
+      if (geoRes.statusCode != 200) throw WeatherException('Location not found. Try again later.');
       final geo = jsonDecode(geoRes.body);
       final results = geo is Map ? geo['results'] : null;
       if (results is! List || results.isEmpty) {
-        throw WeatherException('"$city" ka mausam nahi mila. City ka naam check karo.');
+        throw WeatherException('Weather for "$city" not found. Check the city name.');
       }
       final g = results.first as Map;
       final lat = (g['latitude'] as num).toDouble();
@@ -179,7 +179,7 @@ class WeatherService {
         'forecast_days': '4',
       });
       final wRes = await http.get(wUri).timeout(_timeout);
-      if (wRes.statusCode != 200) throw WeatherException('Mausam ka data nahi aa paya.');
+      if (wRes.statusCode != 200) throw WeatherException('Could not get the weather data.');
       final w = jsonDecode(wRes.body) as Map;
       final c = w['current'] as Map;
       final d = w['daily'] as Map;
@@ -219,9 +219,9 @@ class WeatherService {
     } on WeatherException {
       rethrow;
     } on TimeoutException {
-      throw WeatherException('Internet slow hai. Thodi der baad try karo.');
+      throw WeatherException('The internet is slow. Try again after a while.');
     } catch (_) {
-      throw WeatherException('Mausam load nahi ho paya. Internet check karo.');
+      throw WeatherException('Could not load the weather. Check your internet.');
     }
   }
 

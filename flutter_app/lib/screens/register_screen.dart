@@ -48,7 +48,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _isLoading = false);
 
     if (result['success'] == true) {
-      // OTP screen pe navigate karo
+      // Navigate to the OTP screen
       Navigator.push(
         context,
         MaterialPageRoute(

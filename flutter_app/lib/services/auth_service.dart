@@ -6,12 +6,12 @@ import 'notification_service.dart';
 
 class AuthService {
   // ✅ PRODUCTION: Live Render backend
-  // Local testing ke liye: lanHost mein apna PC ka IP daalo aur _useLocal = true karo.
+  // For local testing: put your PC IP in lanHost and set _useLocal = true.
   static const String _liveUrl = 'https://gulabicharkhi-app.onrender.com/api';
 
-  // --- Local dev override (sirf development ke liye) ---
-  static const bool _useLocal = false;        // true karo to LAN se connect ho
-  static const String lanHost = '192.168.0.150'; // apna PC ka IP yahan
+  // --- Local dev override (for development only) ---
+  static const bool _useLocal = false;        // set to true to connect via LAN
+  static const String lanHost = '192.168.0.150'; // your PC IP here
   static const int lanPort = 5000;
 
   static String get baseUrl {
@@ -19,7 +19,7 @@ class AuthService {
     return _liveUrl;
   }
 
-  // Render free tier cold start mein 30-50 sec lag sakte hain
+  // Render free tier cold start can take 30-50 sec
   static const _timeout = Duration(seconds: 60);
 
   // ==================== HTTP helpers ====================
@@ -38,12 +38,12 @@ class AuthService {
     if (e is TimeoutException) {
       return {
         'success': false,
-        'message': 'Server thoda slow hai (pehli baar open ho raha hai). Dobara try karo.',
+        'message': 'The server is a bit slow (opening for the first time). Please try again.',
       };
     }
     return {
       'success': false,
-      'message': 'Internet connection check karo aur dobara try karo.',
+      'message': 'Check your internet connection and try again.',
     };
   }
 
@@ -125,7 +125,7 @@ class AuthService {
     final data = await _post('/auth/login', {'email': email, 'password': password});
     await _saveSession(data);
     if (data['success'] == true && data['token'] != null) {
-      // Push notification ke liye is phone ka FCM token server ko do
+      // Give this phone's FCM token to the server for push notifications
       NotificationService.registerToken();
     }
     return data;
@@ -136,7 +136,7 @@ class AuthService {
     required String email,
     required String otp,
   }) async {
-    // OTP verify ke baad session save NAHI karte - user ko pehle login karna hoga
+    // Do NOT save the session after OTP verification - the user must log in first
     return _post('/auth/verify-otp', {'email': email, 'otp': otp});
   }
 
@@ -146,12 +146,12 @@ class AuthService {
   }
 
   // ==================== FORGOT PASSWORD ====================
-  // 1) email do -> OTP jayega
+  // 1) provide the email -> an OTP will be sent
   static Future<Map<String, dynamic>> forgotPassword({required String email}) {
     return _post('/auth/forgot-password', {'email': email});
   }
 
-  // 2) OTP verify -> resetToken milta hai
+  // 2) Verify OTP -> you get a resetToken
   static Future<Map<String, dynamic>> verifyResetOtp({
     required String email,
     required String otp,
@@ -159,7 +159,7 @@ class AuthService {
     return _post('/auth/verify-reset-otp', {'email': email, 'otp': otp});
   }
 
-  // 3) naya password set karo (login nahi hota, user ko dobara login karna hoga)
+  // 3) Set the new password (no login happens, the user has to log in again)
   static Future<Map<String, dynamic>> resetPassword({
     required String email,
     required String resetToken,
@@ -205,7 +205,7 @@ class AuthService {
     return [];
   }
 
-  // Server se latest user (team wagairah) le kar local update karo
+  // Fetch the latest user (team etc.) from the server and update locally
   static Future<Map<String, dynamic>?> refreshMe() async {
     final data = await _get('/auth/me');
     if (data['success'] == true && data['user'] is Map) {
@@ -217,7 +217,7 @@ class AuthService {
   }
 
   // ==================== PROFILE ====================
-  /// Full profile data fetch karo (GET /api/profile)
+  /// Fetch the full profile data (GET /api/profile)
   static Future<Map<String, dynamic>> getProfile() => _get('/profile');
 
   /// Profile update: playerName, location, phone, dateOfBirth
@@ -270,7 +270,7 @@ class AuthService {
 
   // ==================== LOGOUT ====================
   static Future<void> logout() async {
-    // Pehle server se FCM token hatao (auth token abhi bhi hai), warna logout ke baad bhi push aata rahega
+    // First remove the FCM token from the server (the auth token still exists), otherwise pushes keep arriving after logout
     try {
       await NotificationService.clearToken();
     } catch (_) {}

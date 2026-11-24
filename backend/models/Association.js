@@ -2,11 +2,11 @@ const mongoose = require('mongoose');
 
 // ============================================================
 // Association (Kite Federation) Model
-// App mein: Association tab mein dikhayi jaati hain
+// In the app: shown in the Association tab
 // e.g. "Rajasthan Patang Sangh", "Jaipur Kite Federation"
 //
-// Officials/Judges bhi isi model mein store hain
-// Federation membership registration bhi yahan
+// Officials/Judges are also stored in this model
+// Federation membership registration is also here
 // ============================================================
 
 const OfficialSchema = new mongoose.Schema({
@@ -42,7 +42,7 @@ const AssociationSchema = new mongoose.Schema({
   email:   { type: String, trim: true, default: '' }, // "hello@kiteassociation.in"
   website: { type: String, trim: true, default: '' },
 
-  // Officials & Judges (Association detail page mein dikhayi jaati hain)
+  // Officials & Judges (shown on the Association detail page)
   officials: [OfficialSchema],
 
   // Rule book sections (expandable accordions in app)
@@ -51,7 +51,7 @@ const AssociationSchema = new mongoose.Schema({
   // Federation members
   members: [FederationMemberSchema],
 
-  // Sanctioned events count (auto-calculated ya manual)
+  // Sanctioned events count (auto-calculated or manual)
   sanctionedEvents: { type: Number, default: 0 },
 
   createdAt: { type: Date, default: Date.now },

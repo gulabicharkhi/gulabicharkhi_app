@@ -1,8 +1,8 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-// Token banane aur verify karne ke liye EK hi secret (pehle dono jagah alag the,
-// .env na milne par token ban jata tha lekin verify fail ho jata tha)
+// A SINGLE secret for creating and verifying tokens (earlier they were different in both places,
+// if .env was missing, the token was created but verification failed)
 const getJwtSecret = () => process.env.JWT_SECRET || 'gulabi_charkhi_secret_key_2024';
 
 const generateToken = (userId) =>

@@ -5,11 +5,11 @@ import '../utils/app_theme.dart';
 import '../services/battle_service.dart';
 import '../widgets/leaderboard_sheet.dart';
 
-/// Match ka poora detail screen
+/// Full detail screen of a match
 ///
 /// Status flow:
 ///   pending  → accept / cancel buttons
-///   accepted → dono captains "Start Battle"
+///   accepted → both captains "Start Battle"
 ///   live     → score + "Claim Cut" + live feed (auto refresh 10s)
 ///   final    → result + winner banner + stats
 class MatchDetailScreen extends StatefulWidget {
@@ -65,7 +65,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
     if (res['success'] != true) {
       if (silent && _m != null) return;
       setState(() {
-        _error   = (res['message'] ?? 'Match load nahi hua').toString();
+        _error   = (res['message'] ?? 'Could not load the match').toString();
         _loading = false;
       });
       return;
@@ -121,7 +121,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
             actions: [
               TextButton(
                   onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text('Ruko',
+                  child: const Text('Wait',
                       style: TextStyle(color: Color(0xFF9E9E9E)))),
               TextButton(
                   onPressed: () => Navigator.pop(ctx, true),
@@ -141,7 +141,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Cut reject karein?',
+        title: const Text('Reject the cut?',
             style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
         content: TextField(
           controller: ctl,
@@ -156,7 +156,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
                   style: TextStyle(color: Color(0xFF9E9E9E)))),
           TextButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Reject karo',
+              child: const Text('Reject',
                   style: TextStyle(
                       color: Colors.redAccent,
                       fontWeight: FontWeight.w800))),
@@ -169,6 +169,31 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
     await _act(() => BattleService.respondCut(
         widget.matchId, cutId,
         approve: false, reason: reason));
+  }
+
+  // ── bout sheet: who won (own team), who lost (opposing team) ──────
+  Future<Map<String, List<String>>?> _openBoutSheet(Map<String, dynamic> m) {
+    final myRole = (m['myCaptainRole'] ?? '').toString();
+    final rosters = BattleService.asMap(m['rosters']) ?? {};
+    final ch = BattleService.asMap(m['challengerTeam']) ?? {};
+    final op = BattleService.asMap(m['opponentTeam']) ?? {};
+    final iAmChallenger = myRole == 'challenger';
+    final myPlayers  = BattleService.asList(rosters[iAmChallenger ? 'challenger' : 'opponent']);
+    final oppPlayers = BattleService.asList(rosters[iAmChallenger ? 'opponent' : 'challenger']);
+    final myName  = ((iAmChallenger ? ch['name'] : op['name']) ?? '').toString();
+    final oppName = ((iAmChallenger ? op['name'] : ch['name']) ?? '').toString();
+
+    return showModalBottomSheet<Map<String, List<String>>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _BoutSheet(
+        myTeamName: myName,
+        oppTeamName: oppName,
+        myPlayers: myPlayers,
+        oppPlayers: oppPlayers,
+      ),
+    );
   }
 
   // ════════════════════════════════════════════════════════════════════════
@@ -291,7 +316,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
             const Icon(Icons.error_outline_rounded,
                 size: 60, color: Color(0xFFCCCCCC)),
             const SizedBox(height: 10),
-            Text(_error ?? 'Match nahi mila',
+            Text(_error ?? 'Match not found',
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Color(0xFF9E9E9E))),
             const SizedBox(height: 14),
@@ -334,6 +359,9 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
           _infoCard(m),
           const SizedBox(height: 10),
 
+          // ── PLAYER BOARD (who won / lost) ───────────────────────────
+          ..._playerBoard(m, status, ch, op),
+
           // ── CUT FEED ────────────────────────────────────────────────────
           _sectionHead('Cut feed (${cuts.length})'),
           if (cuts.isEmpty)
@@ -343,12 +371,12 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
                 Icon(Icons.content_cut_rounded,
                     size: 40, color: Color(0xFFDDCCDD)),
                 SizedBox(height: 8),
-                Text('Abhi koi cut nahi',
+                Text('No cuts yet',
                     style: TextStyle(
                         color: Color(0xFF9E9E9E),
                         fontWeight: FontWeight.w700)),
                 SizedBox(height: 4),
-                Text('Captain kite cut claim karega to yahan dikhega.',
+                Text('It will appear here when a captain claims a kite cut.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                         fontSize: 12.5, color: Color(0xFF9E9E9E))),
@@ -478,10 +506,10 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
     if (role == null) {
       // Viewer
       final msg = status == 'live'
-          ? 'Match LIVE hai. Score captains update karte hain — yahan auto refresh hota hai.'
+          ? 'The match is LIVE. Captains update the score — it refreshes automatically here.'
           : status == 'final'
               ? ''
-              : 'Captains ke start karne ka intezaar hai.';
+              : 'Waiting for the captains to start.';
       if (msg.isEmpty) return const SizedBox.shrink();
       return Padding(
         padding: const EdgeInsets.only(bottom: 10),
@@ -507,8 +535,8 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
           Icons.close_rounded,
           () async {
             final ok = await _confirm(
-                'Decline karein?',
-                'Ye challenge cancel ho jayega.',
+                'Decline?',
+                'This challenge will be cancelled.',
                 'Decline');
             if (ok) await _act(() => BattleService.cancel(id));
           },
@@ -517,16 +545,16 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
         ));
       } else {
         btns.add(_card(const Text(
-            'Opponent captain ke accept karne ka wait hai…',
+            'Waiting for the opponent captain to accept…',
             style: TextStyle(fontSize: 12.5, color: Color(0xFF9E9E9E)))));
         btns.add(const SizedBox(height: 8));
         btns.add(_bigBtn(
-          'Challenge cancel karo',
+          'Cancel challenge',
           Icons.close_rounded,
           () async {
             final ok = await _confirm(
-                'Cancel karein?',
-                'Challenge wapas le liya jayega.',
+                'Cancel?',
+                'The challenge will be withdrawn.',
                 'Cancel');
             if (ok) await _act(() => BattleService.cancel(id));
           },
@@ -562,7 +590,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
       ])));
       btns.add(const SizedBox(height: 8));
       btns.add(_bigBtn(
-        iAmReady ? 'Dusre captain ka wait hai…' : 'Start Battle ▶',
+        iAmReady ? 'Waiting for the other captain…' : 'Start Battle ▶',
         Icons.play_arrow_rounded,
         iAmReady ? null : () => _act(() => BattleService.ready(id)),
       ));
@@ -572,7 +600,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
         Icons.close_rounded,
         () async {
           final ok =
-              await _confirm('Cancel karein?', 'Match cancel ho jayega.', 'Cancel');
+              await _confirm('Cancel?', 'The match will be cancelled.', 'Cancel');
           if (ok) await _act(() => BattleService.cancel(id));
         },
         outline: true,
@@ -582,25 +610,24 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
     // LIVE ───────────────────────────────────────────────────────────────────
     else if (status == 'live') {
       btns.add(_bigBtn(
-        'Kite Cut Claim Karo ✂️',
+        'Claim Kite Cut ✂️',
         Icons.content_cut_rounded,
         () async {
-          final ok = await _confirm(
-              'Cut claim karein?',
-              'Opponent captain approve karega to aapka score +1 hoga.',
-              'Claim karo');
-          if (ok) await _act(() => BattleService.claimCut(id));
+          final r = await _openBoutSheet(m);
+          if (r == null || !mounted) return;
+          await _act(() => BattleService.claimCut(id,
+              winnerIds: r['winners']!, loserIds: r['losers']!));
         },
       ));
       btns.add(const SizedBox(height: 8));
       btns.add(_bigBtn(
-        'Match End Karo 🏁',
+        'End Match 🏁',
         Icons.flag_rounded,
         () async {
           final ok = await _confirm(
-              'Match end karein?',
-              'Jiske cuts zyada honge wo jeetega. Ye wapas nahi hoga.',
-              'End karo');
+              'End the match?',
+              'The side with more cuts will win. This cannot be undone.',
+              'End');
           if (ok) await _act(() => BattleService.end(id));
         },
         outline: true,
@@ -627,7 +654,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
     ].where((r) => r.value.isNotEmpty).toList();
 
     if (rows.isEmpty) {
-      return _card(const Text('Abhi koi details nahi.',
+      return _card(const Text('No details yet.',
           style: TextStyle(color: Color(0xFF9E9E9E))));
     }
 
@@ -655,6 +682,62 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
     ]));
   }
 
+  // ── player board ──────────────────────────────────────────────────────────
+  List<Widget> _playerBoard(Map<String, dynamic> m, String status,
+      Map<String, dynamic> ch, Map<String, dynamic> op) {
+    if (status != 'live' && status != 'final') return const [];
+    final board = BattleService.asList(m['playerBoard']);
+    if (board.isEmpty) return const [];
+
+    Widget teamBlock(String teamKey, String teamName) {
+      final rows = board.where((p) => p['team'] == teamKey).toList();
+      if (rows.isEmpty) return const SizedBox.shrink();
+      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 6, bottom: 4),
+          child: Text(teamName,
+              style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF9E9E9E))),
+        ),
+        for (final p in rows)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(children: [
+              Expanded(
+                child: Text((p['name'] ?? '').toString(),
+                    style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1A1A1A))),
+              ),
+              Text('${p['wins'] ?? 0}W',
+                  style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF15803D))),
+              const SizedBox(width: 10),
+              Text('${p['losses'] ?? 0}L',
+                  style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFFB91C1C))),
+            ]),
+          ),
+      ]);
+    }
+
+    return [
+      _sectionHead('Players'),
+      _card(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        teamBlock('challenger', _tname(ch)),
+        teamBlock('opponent', _tname(op)),
+      ])),
+      const SizedBox(height: 4),
+    ];
+  }
+
   // ── cut row ───────────────────────────────────────────────────────────────
   Widget _cutRow(Map<String, dynamic> c, Map<String, dynamic> ch,
       Map<String, dynamic> op, Map<String, dynamic> m) {
@@ -665,6 +748,12 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
     final claimer = c['claimedBy'] is Map
         ? (c['claimedBy']['name'] ?? '').toString()
         : '';
+    String namesOf(dynamic v) => BattleService.asList(v)
+        .map((e) => (e['name'] ?? '').toString())
+        .where((e) => e.isNotEmpty)
+        .join(' + ');
+    final winnersText = namesOf(c['winners']);
+    final losersText  = namesOf(c['losers']);
 
     final col = st == 'approved'
         ? const Color(0xFF15803D)
@@ -693,13 +782,17 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
           const SizedBox(width: 10),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('$team ne cut claim kiya',
+              Text(
+                  winnersText.isNotEmpty && losersText.isNotEmpty
+                      ? '$winnersText defeated $losersText'
+                      : '$team claimed a cut',
                   style: const TextStyle(
                       fontSize: 13.5,
                       fontWeight: FontWeight.w700,
                       color: Color(0xFF1A1A1A))),
               Text(
                 [
+                  team,
                   if (claimer.isNotEmpty) 'by $claimer',
                   _ago(c['createdAt']),
                   if (st == 'rejected' && reason.isNotEmpty) 'Reason: $reason',
@@ -942,4 +1035,154 @@ class _InfoRow {
   final String key;
   final String value;
   const _InfoRow(this.key, this.value);
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// Bout sheet — the captain picks who won (own team) and who lost (opposing team)
+// ════════════════════════════════════════════════════════════════════════════
+class _BoutSheet extends StatefulWidget {
+  final String myTeamName;
+  final String oppTeamName;
+  final List<Map<String, dynamic>> myPlayers;
+  final List<Map<String, dynamic>> oppPlayers;
+
+  const _BoutSheet({
+    required this.myTeamName,
+    required this.oppTeamName,
+    required this.myPlayers,
+    required this.oppPlayers,
+  });
+
+  @override
+  State<_BoutSheet> createState() => _BoutSheetState();
+}
+
+class _BoutSheetState extends State<_BoutSheet> {
+  static const _pink   = Color(0xFFE93D95);
+  static const _purple = Color(0xFFA64CF5);
+
+  final Set<String> _winners = {};
+  final Set<String> _losers  = {};
+
+  bool get _canSubmit => _winners.isNotEmpty && _losers.isNotEmpty;
+
+  Widget _group(String title, String sub, List<Map<String, dynamic>> players,
+      Set<String> selected, Color accent) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(title,
+          style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF1A1A1A))),
+      const SizedBox(height: 2),
+      Text(sub,
+          style: const TextStyle(fontSize: 12, color: Color(0xFF9E9E9E))),
+      const SizedBox(height: 8),
+      if (players.isEmpty)
+        const Text('No players found in this team.',
+            style: TextStyle(fontSize: 12.5, color: Color(0xFF9E9E9E)))
+      else
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final p in players)
+            FilterChip(
+              label: Text((p['name'] ?? '').toString()),
+              selected: selected.contains(p['id'].toString()),
+              selectedColor: accent.withValues(alpha: 0.18),
+              checkmarkColor: accent,
+              labelStyle: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: selected.contains(p['id'].toString())
+                      ? accent
+                      : const Color(0xFF444444)),
+              onSelected: (v) => setState(() {
+                final id = p['id'].toString();
+                v ? selected.add(id) : selected.remove(id);
+              }),
+            ),
+        ]),
+    ]);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.85),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+          20, 16, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+      child: SingleChildScrollView(
+        child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                      color: const Color(0xFFDDDDDD),
+                      borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text('Kite Cut Claim ✂️',
+                  style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF1A1A1A))),
+              const SizedBox(height: 4),
+              const Text(
+                  'Pick who won and who lost. You can pick more than one player.',
+                  style: TextStyle(fontSize: 12.5, color: Color(0xFF9E9E9E))),
+              const SizedBox(height: 16),
+              _group('${widget.myTeamName} — winners',
+                  'Player(s) of our team who made the cut',
+                  widget.myPlayers, _winners, const Color(0xFF15803D)),
+              const SizedBox(height: 16),
+              _group('${widget.oppTeamName} — losers',
+                  'Player(s) of the opposing team whose kite was cut',
+                  widget.oppPlayers, _losers, const Color(0xFFB91C1C)),
+              const SizedBox(height: 20),
+              GestureDetector(
+                onTap: _canSubmit
+                    ? () => Navigator.pop(context, {
+                          'winners': _winners.toList(),
+                          'losers': _losers.toList(),
+                        })
+                    : null,
+                child: Container(
+                  width: double.infinity, height: 52,
+                  decoration: BoxDecoration(
+                    gradient: _canSubmit
+                        ? const LinearGradient(colors: [_pink, _purple])
+                        : null,
+                    color: _canSubmit ? null : const Color(0xFFEEEEEE),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text('Send claim',
+                      style: TextStyle(
+                          color: _canSubmit
+                              ? Colors.white
+                              : const Color(0xFF9E9E9E),
+                          fontWeight: FontWeight.w900,
+                          fontSize: 15)),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Center(
+                child: TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel',
+                      style: TextStyle(color: Color(0xFF9E9E9E))),
+                ),
+              ),
+            ]),
+      ),
+    );
+  }
 }

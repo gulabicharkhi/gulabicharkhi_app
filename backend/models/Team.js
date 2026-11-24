@@ -10,18 +10,18 @@ const TeamSchema = new mongoose.Schema({
     minlength: [3, 'Team name must be at least 3 characters'],
     maxlength: [30, 'Team name cannot exceed 30 characters'],
   },
-  // Case-insensitive unique check ke liye
+  // For a case-insensitive unique check
   nameKey: { type: String, unique: true, index: true },
   inviteCode: { type: String, unique: true, index: true },
 
-  // 2-4 letters jo match cards par dikhte hain (e.g. SKR). Purani teams mein na ho to name se bana lete hain.
+  // 2-4 letters shown on match cards (e.g. SKR). If older teams do not have one, it is generated from the name.
   tag: { type: String, trim: true, uppercase: true, maxlength: 4, default: '' },
   region: { type: String, trim: true, maxlength: 60, default: '' },
-  // Purana field - region na ho to isse fallback
+  // Old field - used as a fallback if there is no region
   city: { type: String, trim: true, default: '' },
   about: { type: String, trim: true, maxlength: 200, default: '' },
 
-  // URL ya chhota base64 data URI
+  // URL or a small base64 data URI
   logo: { type: String, default: null },
   coverImage: { type: String, default: null },
 
@@ -31,7 +31,7 @@ const TeamSchema = new mongoose.Schema({
   captain: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   members: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 
-  // Public team par "Join" dabane wale players - captain approve/reject karta hai
+  // Public team par "Join" button pressed by players - the captain approves/rejects
   joinRequests: [
     {
       _id: false,
@@ -63,7 +63,7 @@ const TeamSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
-// 6 character invite code (0/O/1/I jaise confusing letters nahi)
+// 6 character invite code (no confusing letters like 0/O/1/I)
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 TeamSchema.statics.generateInviteCode = function () {
   let code = '';
@@ -73,7 +73,7 @@ TeamSchema.statics.generateInviteCode = function () {
   return code;
 };
 
-// Battle/match module ke liye hook: match khatam hone par isse call karo
+// Hook for the Battle/match module: call this when the match ends
 //   await Team.recordResult(teamId, { result: 'W', cutsScored: 5, cutsConceded: 2, playerCuts: { [userId]: 3 } })
 TeamSchema.statics.recordResult = async function (teamId, { result, cutsScored = 0, cutsConceded = 0, playerCuts = {} }) {
   const team = await this.findById(teamId);

@@ -8,11 +8,11 @@ import 'team_detail_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Join a Team Screen  —  Browse | Code | Scan
-// Screenshot ke mutabik:
+// As per the screenshot:
 //   Browse : search bar, teams list (Ready badge, Join button, location, count)
 //   Code   : 6-char invite code input → Find team → Join
 //   Scan   : QR scanner using mobile_scanner package
-//            (pubspec mein add karo: mobile_scanner: ^5.2.3)
+//            (add to pubspec: mobile_scanner: ^5.2.3)
 // ─────────────────────────────────────────────────────────────────────────────
 class JoinTeamScreen extends StatefulWidget {
   const JoinTeamScreen({super.key});
@@ -47,7 +47,7 @@ class _JoinTeamScreenState extends State<JoinTeamScreen>
 
   // ── Scan ────────────────────────────────────────────────────────────────
   bool _scanActive  = false;
-  bool _scanHandled = false; // scan ho chuka, dubara mat karo
+  bool _scanHandled = false; // scan already done, do not repeat
 
   @override
   void initState() {
@@ -129,7 +129,7 @@ class _JoinTeamScreenState extends State<JoinTeamScreen>
     if (res['joined'] == true) {
       Navigator.pop(context, TeamService.asMap(res['team']));
     } else {
-      // Request send hui — list mein "Requested" dikhao
+      // Request sent — show "Requested" in the list
       setState(() {
         for (final t in _teams) {
           if (t['id'].toString() == teamId) t['requested'] = true;
@@ -178,7 +178,7 @@ class _JoinTeamScreenState extends State<JoinTeamScreen>
     if (_scanHandled) return;
     setState(() { _scanHandled = true; _scanActive = false; });
 
-    // QR mein ya to sirf code hota hai ya poora URL (last segment = code)
+    // The QR contains either just the code or the full URL (last segment = code)
     final code = raw.trim().split('/').last.toUpperCase();
 
     setState(() { _finding = true; _foundTeam = null; _codeError = null; });
@@ -188,7 +188,7 @@ class _JoinTeamScreenState extends State<JoinTeamScreen>
       _finding = false;
       if (res['success'] == true) {
         _foundTeam = TeamService.asMap(res['team']);
-        // Code tab par switch karo taaki user Join dekh sake
+        // Switch to the Code tab so the user can see Join
         _tabCtrl.animateTo(1);
         _codeCtl.text = code;
       } else {
@@ -472,7 +472,7 @@ class _JoinTeamScreenState extends State<JoinTeamScreen>
     );
   }
 
-  // "Ready" / "Full" badge — screenshot ke mutabik green "Ready"
+  // "Ready" / "Full" badge — green "Ready" as per the screenshot
   Widget _readyBadge(bool full) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
@@ -559,7 +559,7 @@ class _JoinTeamScreenState extends State<JoinTeamScreen>
                     color: Color(0xFF1A1A1A))),
             const SizedBox(height: 6),
             const Text(
-              'Captain ne share kiya 6-character code type karo neeche — team turant mil jayegi.',
+              'Type the 6-character code shared by the captain below — you will find the team right away.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 12.5, color: Color(0xFF999999), height: 1.4),
             ),
@@ -606,7 +606,7 @@ class _JoinTeamScreenState extends State<JoinTeamScreen>
         // Found team card
         if (_foundTeam != null) ...[
           const SizedBox(height: 20),
-          _sectionLabel('Team mili! 🎉'),
+          _sectionLabel('Team found! 🎉'),
           const SizedBox(height: 8),
           _browseRow(_foundTeam!.map((k, v) {
             if (k == 'id') return MapEntry(k, v);
@@ -685,9 +685,9 @@ class _JoinTeamScreenState extends State<JoinTeamScreen>
 
 // ════════════════════════════════════════════════════════════════════════════
 // SCAN TAB VIEW  —  Uses mobile_scanner package
-// pubspec.yaml mein add karo:
+// Add to pubspec.yaml:
 //   mobile_scanner: ^5.2.3
-// AndroidManifest mein CAMERA permission, iOS Info.plist mein NSCameraUsageDescription
+// CAMERA permission in AndroidManifest, NSCameraUsageDescription in iOS Info.plist
 // ════════════════════════════════════════════════════════════════════════════
 class _ScanTabView extends StatefulWidget {
   final bool active;
@@ -720,8 +720,8 @@ class _ScanTabViewState extends State<_ScanTabView> {
     }
 
     if (_permissionDenied) {
-      return _fallback('Camera permission nahi mili',
-          'Settings mein ja ke camera allow karo, fir wapas aao.');
+      return _fallback('Camera permission not granted',
+          'Go to Settings, allow the camera, then come back.');
     }
 
     // Try to show scanner — if mobile_scanner not in pubspec, show install guide
@@ -729,8 +729,8 @@ class _ScanTabViewState extends State<_ScanTabView> {
   }
 
   Widget _scannerWidget() {
-    // ── mobile_scanner package use karo ──────────────────────────────────
-    // Agar package install hai to below code uncomment karo:
+    // ── use the mobile_scanner package ──────────────────────────────────
+    // If the package is installed, uncomment the code below:
     //
     // return MobileScanner(
     //   controller: MobileScannerController(
@@ -745,11 +745,11 @@ class _ScanTabViewState extends State<_ScanTabView> {
     //     setState(() => _scanned = true);
     //     widget.onScanned(raw);
     //   },
-    //   errorBuilder: (ctx, err, _) => _fallback('Camera nahi khuli', err.errorDetails?.message ?? ''),
+    //   errorBuilder: (ctx, err, _) => _fallback('Camera did not open', err.errorDetails?.message ?? ''),
     //   overlayBuilder: (ctx, constraints) => _overlay(constraints),
     // );
     //
-    // ── Jab tak package add nahi hua, yeh placeholder dikhao ─────────────
+    // ── Show this placeholder until the package is added ─────────────
     return Stack(
       children: [
         // Dark camera preview placeholder
@@ -778,7 +778,7 @@ class _ScanTabViewState extends State<_ScanTabView> {
                 borderRadius: BorderRadius.circular(16),
               ),
               child: const Text(
-                'QR code frame ke andar rakho — automatically scan ho jayega',
+                'Keep the QR code inside the frame — it will scan automatically',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.white, fontSize: 13.5, height: 1.4),
               ),
@@ -787,7 +787,7 @@ class _ScanTabViewState extends State<_ScanTabView> {
             // Manual hint
             GestureDetector(
               onTap: () {
-                // Code tab par bhejo
+                // Send to the Code tab
                 DefaultTabController.maybeOf(context);
               },
               child: Container(
@@ -797,7 +797,7 @@ class _ScanTabViewState extends State<_ScanTabView> {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: const Text(
-                  '# Code tab use karo',
+                  '# Use the Code tab',
                   style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13),
                 ),
               ),
@@ -805,7 +805,7 @@ class _ScanTabViewState extends State<_ScanTabView> {
           ]),
         ),
 
-        // Package install note (dev mein)
+        // Package install note (in dev)
         Positioned(
           top: 16,
           left: 0,
@@ -819,7 +819,7 @@ class _ScanTabViewState extends State<_ScanTabView> {
                 borderRadius: BorderRadius.circular(10),
               ),
               child: const Text(
-                'pubspec.yaml mein add karo:\nmobile_scanner: ^5.2.3',
+                'Add to pubspec.yaml:\nmobile_scanner: ^5.2.3',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600,
                     color: Color(0xFF5A4000)),
@@ -847,7 +847,7 @@ class _ScanTabViewState extends State<_ScanTabView> {
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 13, color: Color(0xFF999999))),
           const SizedBox(height: 20),
-          const Text('Ya "Code" tab use karo',
+          const Text('Or use the "Code" tab',
               style: TextStyle(fontSize: 13, color: _pink, fontWeight: FontWeight.w600)),
         ]),
       ),
@@ -855,7 +855,7 @@ class _ScanTabViewState extends State<_ScanTabView> {
   }
 }
 
-/// QR scanning frame ke corners paint karta hai
+/// Paints the corners of the QR scanning frame
 class _QRFramePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {

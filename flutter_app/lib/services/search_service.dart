@@ -22,11 +22,11 @@ class SearchService {
       if (decoded is Map) return Map<String, dynamic>.from(decoded);
       return {'success': false, 'message': 'Unexpected server response (${res.statusCode})'};
     } on TimeoutException {
-      return {'success': false, 'message': 'Server ne response nahi diya. Internet / backend check karo.'};
+      return {'success': false, 'message': 'The server did not respond. Check the internet / backend.'};
     } catch (_) {
       return {
         'success': false,
-        'message': 'Server se connect nahi ho paya. Backend chal raha hai? (${AuthService.baseUrl})',
+        'message': 'Could not connect to the server. Is the backend running? (${AuthService.baseUrl})',
       };
     }
   }

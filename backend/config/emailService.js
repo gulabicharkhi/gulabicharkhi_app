@@ -1,13 +1,13 @@
 // ============================================================
 // config/emailService.js — UPDATED
-// Render (free tier) SMTP ports (25/465/587) block karta hai, isliye
-// ab Brevo ka HTTP API (port 443) use hota hai. SMTP sirf local fallback.
+// Render (free tier) blocks SMTP ports (25/465/587), so
+// the Brevo HTTP API (port 443) is now used. SMTP is only a local fallback.
 // ============================================================
 const nodemailer = require('nodemailer');
 
 const getConfig = () => ({
   apiKey: (process.env.BREVO_API_KEY || '').trim(),
-  // Brevo me VERIFIED sender email (Senders & IP -> Senders). smtp-brevo.com wala login yahan mat daalo
+  // VERIFIED sender email in Brevo (Senders & IP -> Senders). Do not put the smtp-brevo.com login here
   from: (process.env.EMAIL_FROM || '').trim(),
   fromName: (process.env.EMAIL_FROM_NAME || 'Gulabi Charkhi').trim(),
   host: (process.env.EMAIL_HOST || 'smtp-relay.brevo.com').trim(),
@@ -43,18 +43,18 @@ const explainError = (error) => {
   const code = error && error.code;
   const msg = (error && error.message) || '';
   if (error && error.brevoStatus) {
-    if (error.brevoStatus === 401) return 'Brevo API key galat hai (xkeysib-... wali API key chahiye, SMTP key nahi).';
-    if (error.brevoStatus === 403) return `Brevo ne forbidden kiya: ${msg}. API key mein Transactional email = All permission check karo.`;
-    if (error.brevoStatus === 400) return `Brevo ne request reject ki: ${msg}. EMAIL_FROM verified sender hona chahiye.`;
+    if (error.brevoStatus === 401) return 'Brevo API key is invalid (an xkeysib-... API key is required, not an SMTP key).';
+    if (error.brevoStatus === 403) return `Brevo returned forbidden: ${msg}. Check that the API key has the Transactional email = All permission.`;
+    if (error.brevoStatus === 400) return `Brevo rejected the request: ${msg}. EMAIL_FROM must be a verified sender.`;
     return `Brevo API error ${error.brevoStatus}: ${msg}`;
   }
   if (code === 'EAUTH' || /Invalid login|Username and Password not accepted|535/i.test(msg)) {
-    return 'Brevo ne login reject kiya — SMTP key galat hai ya account mein SMTP enable nahi hai.';
+    return 'Brevo rejected the login — the SMTP key is wrong or SMTP is not enabled on the account.';
   }
   if (['ETIMEDOUT', 'ESOCKET', 'ECONNECTION', 'ECONNREFUSED', 'EDNS', 'ENOTFOUND'].includes(code)) {
-    return `Server ${getConfig().host}:${getConfig().port} tak pahunch nahi pa raha (Render SMTP block karta hai — BREVO_API_KEY use karo).`;
+    return `Server ${getConfig().host}:${getConfig().port} is unreachable (Render blocks SMTP — use BREVO_API_KEY).`;
   }
-  if (code === 'EENVELOPE') return 'Receiver email address valid nahi hai.';
+  if (code === 'EENVELOPE') return 'Receiver email address is not valid.';
   return msg || 'Unknown email error';
 };
 
@@ -93,13 +93,13 @@ const sendViaApi = async ({ to, subject, text, html }) => {
 
 const verifyEmailSetup = async () => {
   if (!isConfigured()) {
-    console.warn('⚠️  Email config missing (BREVO_API_KEY + EMAIL_FROM, ya EMAIL_USER/EMAIL_PASS). OTP sirf console mein dikhega.');
+    console.warn('⚠️  Email config missing (BREVO_API_KEY + EMAIL_FROM, or EMAIL_USER/EMAIL_PASS). OTP will only be shown in the console.');
     return false;
   }
   try {
     if (useApi()) {
-      // Restricted key (sirf Transactional email) /account endpoint par 403 deti hai,
-      // isliye yahan network check nahi karte. Asli check pehli OTP mail par hota hai.
+      // A restricted key (Transactional email only) returns 403 on the /account endpoint,
+      // so we skip the network check here. The real check happens on the first OTP mail.
       console.log(`✅ Email ready — Brevo HTTP API, sender ${getConfig().from}`);
     } else {
       await createTransporter().verify();
@@ -118,7 +118,7 @@ const sendOtpEmail = async (toEmail, otp, userName, purpose = 'verify') => {
   const codeName = isReset ? 'password reset code' : 'verification code';
 
   if (!isConfigured()) {
-    const hint = 'Email config set nahi hai (BREVO_API_KEY + EMAIL_FROM).';
+    const hint = 'Email config is not set (BREVO_API_KEY + EMAIL_FROM).';
     console.error('Email send error:', hint);
     return { success: false, error: hint, hint };
   }
@@ -150,7 +150,7 @@ const sendOtpEmail = async (toEmail, otp, userName, purpose = 'verify') => {
           <div class="container">
             <div class="header">
               <h1>Gulabi Charkhi</h1>
-              <p>गुलाबी चरखी • Kite Battle Arena</p>
+              <p>Pink Spool • Kite Battle Arena</p>
             </div>
             <div class="body">
               <p class="greeting">Hello, <strong>${escapeHtml(userName || 'Player')}</strong>!</p>

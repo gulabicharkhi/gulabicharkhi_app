@@ -4,12 +4,12 @@ import '../services/battle_service.dart';
 import '../widgets/team_widgets.dart';
 import 'match_detail_screen.dart';
 
-/// Battle Arena — Captain ka control center
+/// Battle Arena — the Captain's control center
 ///
 /// Flow:
-///   1. Captain → kisi team ko Challenge bhejo (venue + schedule optional)
-///   2. Opponent captain → Incoming card pe Accept ya Decline
-///   3. Dono captains → "Start Battle" dabate hain → LIVE
+///   1. Captain → sends a Challenge to a team (venue + schedule optional)
+///   2. Opponent captain → Accept or Decline on the Incoming card
+///   3. Both captains → press "Start Battle" → LIVE
 ///   4. LIVE match → MatchDetailScreen
 class BattleArenaScreen extends StatefulWidget {
   const BattleArenaScreen({super.key});
@@ -39,7 +39,7 @@ class _BattleArenaScreenState extends State<BattleArenaScreen> {
     if (!mounted) return;
     if (res['success'] != true) {
       setState(() {
-        _error   = (res['message'] ?? 'Arena load nahi hua').toString();
+        _error   = (res['message'] ?? 'Could not load the arena').toString();
         _loading = false;
       });
       return;
@@ -67,7 +67,7 @@ class _BattleArenaScreenState extends State<BattleArenaScreen> {
     if (!mounted) return;
     setState(() => _busy = false);
     final ok = res['success'] == true;
-    _toast((res['message'] ?? (ok ? 'Done!' : 'Kuch galat hua')).toString(),
+    _toast((res['message'] ?? (ok ? 'Done!' : 'Something went wrong')).toString(),
         error: !ok);
     if (ok) await _load(silent: true);
   }
@@ -84,7 +84,7 @@ class _BattleArenaScreenState extends State<BattleArenaScreen> {
 
   // ── challenge dialog ─────────────────────────────────────────────────────
   Future<void> _challengeDialog(Map<String, dynamic> team) async {
-    // Controllers ab sheet ke andar bante/dispose hote hain (crash fix)
+    // Controllers are now created/disposed inside the sheet (crash fix)
     final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
@@ -115,7 +115,7 @@ class _BattleArenaScreenState extends State<BattleArenaScreen> {
 
   // ── decline dialog ───────────────────────────────────────────────────────
   Future<void> _declineDialog(Map<String, dynamic> battle) async {
-    // null = cancel, warna reason string (empty bhi ho sakti hai)
+    // null = cancel, otherwise the reason string (can also be empty)
     final reason = await showDialog<String>(
       context: context,
       builder: (ctx) => const _DeclineDialog(),
@@ -176,7 +176,7 @@ class _BattleArenaScreenState extends State<BattleArenaScreen> {
             Text(
               team != null
                   ? (team['name'] ?? '').toString()
-                  : 'Challenge, accept aur start karo',
+                  : 'Challenge, accept and start',
               style: const TextStyle(color: Colors.white70, fontSize: 12.5),
             ),
           ]),
@@ -222,12 +222,12 @@ class _BattleArenaScreenState extends State<BattleArenaScreen> {
     final d = _data!;
 
     if (d['hasTeam'] != true) {
-      return _centred(_infoCard(Icons.groups_rounded, 'Team chahiye',
-          'Battle ke liye pehle Teams tab se team banao ya join karo.'));
+      return _centred(_infoCard(Icons.groups_rounded, 'Team required',
+          'To battle, first create or join a team from the Teams tab.'));
     }
     if (d['isCaptain'] != true) {
-      return _centred(_infoCard(Icons.shield_rounded, 'Sirf captain',
-          'Challenge bhejna / accept karna sirf team captain kar sakta hai.'));
+      return _centred(_infoCard(Icons.shield_rounded, 'Captain only',
+          'Only the team captain can send / accept challenges.'));
     }
 
     final incoming = BattleService.asList(d['incoming']);
@@ -266,8 +266,8 @@ class _BattleArenaScreenState extends State<BattleArenaScreen> {
           // ── READY TEAMS ──────────────────────────────────────────────────
           _sectionLabel('🏹 Teams to challenge', ready.length, const Color(0xFFE93D95)),
           if (ready.isEmpty)
-            _infoCard(Icons.sports_score_rounded, 'Koi team available nahi',
-                'Abhi koi aur public team nahi hai jise challenge kiya ja sake.'),
+            _infoCard(Icons.sports_score_rounded, 'No team available',
+                'There is no other public team right now that can be challenged.'),
           ...ready.map(_teamCard),
         ],
       ),
@@ -283,7 +283,7 @@ class _BattleArenaScreenState extends State<BattleArenaScreen> {
       team: ct,
       topTag: _tag('INCOMING', const Color(0xFF8E3FD6)),
       name: (ct['name'] ?? '').toString(),
-      sub: 'Aapko battle challenge kiya hai',
+      sub: 'Challenged you to a battle',
       info: when,
       venue: _venue(b),
       onTap: () => _openBattle(b),
@@ -312,8 +312,8 @@ class _BattleArenaScreenState extends State<BattleArenaScreen> {
           isLive ? const Color(0xFFEF4444) : const Color(0xFF15803D)),
       name: (ct['name'] ?? '').toString(),
       sub: isLive
-          ? 'Match chal raha hai — score dekhne ke liye tap karo'
-          : 'Accepted — dono captains "Start Battle" dabayein',
+          ? 'Match in progress — tap to see the score'
+          : 'Accepted — both captains need to press "Start Battle"',
       venue: _venue(b),
       onTap: () => _openBattle(b),
       bottom: isLive
@@ -333,11 +333,11 @@ class _BattleArenaScreenState extends State<BattleArenaScreen> {
       team: ct,
       topTag: _tag('PENDING', const Color(0xFFB45309)),
       name: (ct['name'] ?? '').toString(),
-      sub: 'Unke captain ke accept karne ka wait hai…',
+      sub: 'Waiting for their captain to accept…',
       info: when,
       venue: _venue(b),
       onTap: () => _openBattle(b),
-      bottom: _outlineBtn('Challenge cancel karo', Icons.close_rounded,
+      bottom: _outlineBtn('Cancel challenge', Icons.close_rounded,
           _busy ? null : () => _run(() => BattleService.cancel(b['id'].toString()))),
     );
   }
@@ -724,13 +724,13 @@ class _ChallengeSheetState extends State<_ChallengeSheet> {
   }
 
   String get _dateStr {
-    if (_date == null) return 'Date chunein (optional)';
+    if (_date == null) return 'Select date (optional)';
     const m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     return '${_date!.day} ${m[_date!.month - 1]} ${_date!.year}';
   }
 
   String get _timeStr {
-    if (_time == null) return 'Time chunein (optional)';
+    if (_time == null) return 'Select time (optional)';
     final h    = _time!.hour % 12 == 0 ? 12 : _time!.hour % 12;
     final min  = _time!.minute.toString().padLeft(2, '0');
     final ampm = _time!.hour < 12 ? 'AM' : 'PM';
@@ -768,7 +768,7 @@ class _ChallengeSheetState extends State<_ChallengeSheet> {
           ),
         ),
         const SizedBox(height: 4),
-        const Text('Match details optional hain',
+        const Text('Match details are optional',
             style: TextStyle(fontSize: 12.5, color: Color(0xFF9E9E9E))),
         const SizedBox(height: 20),
 
@@ -810,7 +810,7 @@ class _ChallengeSheetState extends State<_ChallengeSheet> {
               borderRadius: BorderRadius.circular(14),
             ),
             alignment: Alignment.center,
-            child: const Text('Challenge Bhejo 🪁',
+            child: const Text('Send Challenge 🪁',
                 style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w900,
@@ -876,7 +876,7 @@ class _ChallengeSheetState extends State<_ChallengeSheet> {
 
 
 // ════════════════════════════════════════════════════════════════════════════
-// Decline dialog (controller isi widget ke andar dispose hota hai)
+// Decline dialog (the controller is disposed inside this widget)
 // ════════════════════════════════════════════════════════════════════════════
 class _DeclineDialog extends StatefulWidget {
   const _DeclineDialog();
@@ -898,7 +898,7 @@ class _DeclineDialogState extends State<_DeclineDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: const Text('Challenge decline karein?',
+      title: const Text('Decline the challenge?',
           style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
       content: TextField(
         controller: _reasonCtl,
@@ -906,18 +906,18 @@ class _DeclineDialogState extends State<_DeclineDialog> {
         textCapitalization: TextCapitalization.sentences,
         decoration: const InputDecoration(
           labelText: 'Reason (optional)',
-          hintText: 'e.g. Time nahi hai abhi',
+          hintText: 'e.g. No time right now',
           border: OutlineInputBorder(),
         ),
       ),
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Ruko',
+            child: const Text('Wait',
                 style: TextStyle(color: Color(0xFF9E9E9E)))),
         TextButton(
             onPressed: () => Navigator.pop(context, _reasonCtl.text.trim()),
-            child: const Text('Decline karo',
+            child: const Text('Decline',
                 style: TextStyle(
                     color: Colors.redAccent, fontWeight: FontWeight.w800))),
       ],

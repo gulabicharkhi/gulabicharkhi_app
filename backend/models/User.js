@@ -1,8 +1,8 @@
 // ============================================================
-// User Model — UPDATED: fcmToken field add kiya
+// User Model — UPDATED: fcmToken field added
 // models/User.js
 //
-// Purana model ka pura code SAME hai, sirf fcmToken field add kiya hai.
+// The rest of the old model code is the SAME, only the fcmToken field was added.
 // Search for "FCM" to find the new additions.
 // ============================================================
 
@@ -94,15 +94,15 @@ const UserSchema = new mongoose.Schema({
     },
   ],
 
-  // ==================== FCM — NAYA FIELD ====================
-  // Flutter app se login/startup par POST /api/notifications/fcm-token pe bheja jata hai
-  // Push notifications iske zariye jaati hain (Firebase Cloud Messaging)
-  // Ek device par login karne par pichla token replace ho jata hai
-  // App uninstall ya token expire hone par push fail hoti hai aur field clear ho jati hai
+  // ==================== FCM — NEW FIELD ====================
+  // Sent from the Flutter app on login/startup via POST /api/notifications/fcm-token
+  // Push notifications are delivered through this (Firebase Cloud Messaging)
+  // Logging in on a device replaces the previous token
+  // If the app is uninstalled or the token expires, the push fails and the field is cleared
   fcmToken: {
     type: String,
     default: null,
-    select: false,  // by default queries mein nahi aata (security)
+    select: false,  // not returned in queries by default (security)
   },
 
   createdAt: {

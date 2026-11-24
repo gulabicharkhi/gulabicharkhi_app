@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import '../utils/app_theme.dart';
 import '../services/weather_service.dart';
 
-/// Home > Weather chip dabane par khulne wali sheet.
-/// Current mausam + patang udaane ka verdict + agle 3 din.
+/// Sheet that opens when the Home > Weather chip is pressed.
+/// Current weather + the kite-flying verdict + the next 3 days.
 Future<void> showWeatherSheet(BuildContext context, {required String city}) {
   return showModalBottomSheet<void>(
     context: context,
@@ -30,7 +30,7 @@ class _WeatherSheetState extends State<WeatherSheet> {
   void initState() {
     super.initState();
     if (widget.city.trim().isEmpty) {
-      _error = 'Profile me apna city add karo, tab yahan us shehar ka mausam dikhega.';
+      _error = 'Add your city in your Profile, then the weather of that city will show here.';
     } else {
       _load();
     }
@@ -107,7 +107,7 @@ class _WeatherSheetState extends State<WeatherSheet> {
             Icon(Icons.cloud_off_rounded, size: 52, color: AppColors.primaryPink.withValues(alpha: 0.5)),
             const SizedBox(height: 12),
             Text(
-              _error ?? 'Mausam load nahi ho paya.',
+              _error ?? 'Could not load the weather.',
               textAlign: TextAlign.center,
               style: const TextStyle(color: AppColors.textGrey, fontSize: 14),
             ),
@@ -262,7 +262,7 @@ class _WeatherSheetState extends State<WeatherSheet> {
       if (w.daily.length > 1) ...[
         const SizedBox(height: 18),
         const Text(
-          'Agle din',
+          'Next days',
           style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textDark),
         ),
         const SizedBox(height: 8),

@@ -24,7 +24,37 @@ const wrap = (label, fn) => async (req, res) => {
 
 const sid = (v) => String(v && v._id ? v._id : v);
 
-// Battle ka summary object (list card ke liye)
+// Minimum number of players required in each team to start a match.
+// Currently 1 for testing. Once every team has 5 people, set MIN_PLAYERS_TO_START=5 in the Render env.
+const MIN_PLAYERS = Math.max(1, parseInt(process.env.MIN_PLAYERS_TO_START || '1', 10) || 1);
+
+const person = (u) => ({ id: sid(u), name: u && u.name ? u.name : '' });
+
+// Team members (only when populated, with names)
+const rosterOf = (t) =>
+  ((t && t.members) || [])
+    .filter((m) => m && typeof m === 'object' && m.name)
+    .map((m) => ({ id: m._id, name: m.name }));
+
+// W-L of every player from approved bouts (live player board)
+const playerBoardOf = (b) => {
+  const board = {};
+  const touch = (u, team) => {
+    const k = sid(u);
+    if (!board[k]) board[k] = { id: k, name: (u && u.name) || '', team, wins: 0, losses: 0 };
+    return board[k];
+  };
+  for (const c of b.cutEvents || []) {
+    if (c.status !== 'approved') continue;
+    const winTeam  = sid(c.claimedByTeam) === sid(b.challengerTeam) ? 'challenger' : 'opponent';
+    const loseTeam = winTeam === 'challenger' ? 'opponent' : 'challenger';
+    (c.winners || []).forEach((u) => { touch(u, winTeam).wins += 1; });
+    (c.losers  || []).forEach((u) => { touch(u, loseTeam).losses += 1; });
+  }
+  return Object.values(board).sort((a, z) => z.wins - a.wins || a.losses - z.losses);
+};
+
+// Battle summary object (for the list card)
 const battleCard = (b, myTeamId) => {
   const myTeam = sid(b.challengerTeam) === sid(myTeamId) ? 'challenger' : 'opponent';
   return {
@@ -57,13 +87,13 @@ const battleCard = (b, myTeamId) => {
   };
 };
 
-// Battle ka detailed object (Battle screen ke liye)
+// Battle detailed object (for the Battle screen)
 const battleDetail = (b, userId) => {
   const uid = sid(userId);
   const challTeam = b.challengerTeam || {};
   const oppTeam   = b.opponentTeam   || {};
-  // Captain role: sirf captains hi battle ke actions (accept/ready/cut/end) kar sakte hain.
-  // opponentCaptain accept ke baad set hota hai, tab tak opponent team ka captain hi opponent hai.
+  // Captain role: only captains can perform battle actions (accept/ready/cut/end).
+  // opponentCaptain is set after accepting; until then the captain of the opponent team is the opponent.
   let myCaptainRole = null;
   if (sid(b.challengerCaptain) === uid) myCaptainRole = 'challenger';
   else if (sid(b.opponentCaptain) === uid || (oppTeam.captain && sid(oppTeam.captain) === uid)) myCaptainRole = 'opponent';
@@ -85,11 +115,16 @@ const battleDetail = (b, userId) => {
       claimedBy:     c.claimedBy,
       claimedByTeam: c.claimedByTeam,
       cutPlayer:     c.cutPlayer || null,
+      winners:       (c.winners || []).map(person),
+      losers:        (c.losers  || []).map(person),
       status:        c.status,
       rejectionReason: c.rejectionReason || '',
       createdAt:     c.createdAt,
       resolvedAt:    c.resolvedAt || null,
     })),
+    rosters: { challenger: rosterOf(challTeam), opponent: rosterOf(oppTeam) },
+    playerBoard: playerBoardOf(b),
+    minPlayers: MIN_PLAYERS,
     startedAt:    b.startedAt,
     endedAt:      b.endedAt,
     challengedAt: b.challengedAt,
@@ -97,10 +132,10 @@ const battleDetail = (b, userId) => {
   };
 };
 
-// User apni team ka captain hai?
+// Is the user the captain of their team?
 const isCaptainOfTeam = (team, userId) => sid(team.captain) === sid(userId);
 
-// User is battle ka participant (captain side se) hai?
+// Is the user a participant of this battle (from the captain side)?
 const getBattleRole = (battle, userId) => {
   const uid = sid(userId);
   if (sid(battle.challengerCaptain) === uid) return 'challenger';
@@ -109,7 +144,7 @@ const getBattleRole = (battle, userId) => {
 };
 
 // ==================== @POST /api/battles/challenge ====================
-// Captain kisi team ko battle ke liye challenge karta hai
+// A captain challenges a team to a battle
 // body: { opponentTeamId, venue?, area?, lat?, lng? }
 router.post('/challenge', protect, wrap('Challenge', async (req, res) => {
   const { opponentTeamId, venue, area, lat, lng, scheduledAt } = req.body;
@@ -118,7 +153,7 @@ router.post('/challenge', protect, wrap('Challenge', async (req, res) => {
     return fail(res, 400, 'Invalid opponent team id');
   }
 
-  // Meri team find karo
+  // Find my team
   const me = await User.findById(req.user._id).select('team');
   if (!me.team) return fail(res, 400, 'You must be in a team to challenge.');
 
@@ -135,7 +170,7 @@ router.post('/challenge', protect, wrap('Challenge', async (req, res) => {
   const opponentTeam = await Team.findById(opponentTeamId).select('captain name tag logo members');
   if (!opponentTeam) return fail(res, 404, 'Opponent team not found.');
 
-  // Existing pending/accepted/live challenge already hai?
+  // Is there already an existing pending/accepted/live challenge?
   const existing = await Battle.findOne({
     $or: [
       { challengerTeam: myTeam._id, opponentTeam: opponentTeamId, status: { $in: ['pending', 'accepted', 'live'] } },
@@ -153,23 +188,23 @@ router.post('/challenge', protect, wrap('Challenge', async (req, res) => {
     opponentTeam:      opponentTeamId,
     challengerCaptain: req.user._id,
     venue: (venue || '').trim().slice(0, 100),
-    // Area na di ho to team ki city/region lete hain, taaki "Near me" me match dikhe
+    // If no area is given, use the team's city/region so the match shows up in "Near me"
     area:  ((area || '').trim() || myTeam.region || myTeam.city || '').slice(0, 100),
     location: { type: 'Point', coordinates: coords },
     scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
   });
 
-  // Opponent captain ko notification
+  // Notification to the opponent captain
   await Notification.send(
     opponentTeam.captain,
     'battle_challenge',
-    `${myTeam.name} ne aapko challenge kiya! 🪁`,
-    `${myTeam.name} ne kite battle challenge bheja hai.` +
+    `${myTeam.name} challenged you! 🪁`,
+    `${myTeam.name} has sent you a kite battle challenge.` +
       (battle.venue ? ` Venue: ${battle.venue}.` : '') +
       (battle.scheduledAt
         ? ` Time: ${new Date(battle.scheduledAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' })}.`
         : '') +
-      ' Accept ya decline karo.',
+      ' Accept or decline.',
     'Battle',
     battle._id
   );
@@ -183,7 +218,7 @@ router.post('/challenge', protect, wrap('Challenge', async (req, res) => {
 
 // ==================== @GET /api/battles/arena ====================
 // Battle Arena screen - incoming challenges, outgoing challenges, ready opponents
-// Captain hi dekh sakta hai
+// Only the captain can view this
 router.get('/arena', protect, wrap('Arena', async (req, res) => {
   const me = await User.findById(req.user._id).select('team');
   if (!me.team) {
@@ -211,7 +246,7 @@ router.get('/arena', protect, wrap('Arena', async (req, res) => {
     .populate('opponentTeam',   'name tag logo region members maxMembers')
     .sort({ challengedAt: -1 });
 
-  // Active = accepted (start ka wait) ya live battles jisme meri team hai
+  // Active = accepted (waiting to start) or live battles that include my team
   const active = await Battle.find({
     $or: [{ challengerTeam: myTeam._id }, { opponentTeam: myTeam._id }],
     status: { $in: ['accepted', 'live'] },
@@ -251,7 +286,7 @@ router.get('/arena', protect, wrap('Arena', async (req, res) => {
 }));
 
 // ==================== @GET /api/battles/my ====================
-// Meri team ke sare battles (team page > Matches tab)
+// All battles of my team (team page > Matches tab)
 router.get('/my', protect, wrap('My battles', async (req, res) => {
   const me = await User.findById(req.user._id).select('team');
   if (!me.team) return res.status(200).json({ success: true, battles: [] });
@@ -276,10 +311,10 @@ router.get('/my', protect, wrap('My battles', async (req, res) => {
 
 // ==================== @GET /api/battles/nearby ====================
 // Home "Matches near you" + Matches tab.
-// ?city=Jaipur   -> area/venue mein city aaye (GPS na ho tab)
-// ?lat=&lng=&radius=25000  -> GPS se (optional, distanceKm bhi milta hai)
+// ?city=Jaipur   -> city appears in area/venue (when there is no GPS)
+// ?lat=&lng=&radius=25000  -> by GPS (optional, distanceKm is also returned)
 // ?status=live|upcoming|final|all  ?q=search  ?page=1&limit=20
-// Response mein counts {live, upcoming} bhi aate hain (same city/q filter par).
+// The response also includes counts {live, upcoming} (for the same city/q filter).
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const toRad = (d) => (d * Math.PI) / 180;
 const haversineKm = (lat1, lng1, lat2, lng2) => {
@@ -300,11 +335,11 @@ router.get('/nearby', protect, wrap('Nearby battles', async (req, res) => {
   const q      = String(req.query.q || '').trim().slice(0, 50);
   const city   = String(req.query.city || '').split(',')[0].trim().slice(0, 50);
 
-  // Common filters (status ko chhodkar) - counts bhi inhi par
+  // Common filters (except status) - the counts also use these
   const and = [];
   if (city) {
     const re = new RegExp(escapeRe(city), 'i');
-    // Match ki area/venue me city ho, ya dono me se kisi team ki region/city wahi ho
+    // The city is in the match area/venue, or the region/city of either team is the same
     const cityTeamIds = (await Team.find({ $or: [{ region: re }, { city: re }] }).select('_id').limit(500).lean()).map((t) => t._id);
     and.push({ $or: [{ area: re }, { venue: re }, { challengerTeam: { $in: cityTeamIds } }, { opponentTeam: { $in: cityTeamIds } }] });
   }
@@ -314,7 +349,7 @@ router.get('/nearby', protect, wrap('Nearby battles', async (req, res) => {
     and.push({ $or: [{ venue: re }, { area: re }, { challengerTeam: { $in: ids } }, { opponentTeam: { $in: ids } }] });
   }
   if (hasGeo) {
-    // $near countDocuments mein error deta hai, isliye $geoWithin
+    // $near throws an error in countDocuments, hence $geoWithin
     and.push({ location: { $geoWithin: { $centerSphere: [[lng, lat], radius / 6378100] } } });
   }
   const base = and.length ? { $and: and } : {};
@@ -350,7 +385,7 @@ router.get('/nearby', protect, wrap('Nearby battles', async (req, res) => {
         distanceKm: hasGeo && hasLoc ? Math.round(haversineKm(lat, lng, c[1], c[0]) * 10) / 10 : null,
       };
     })
-    // Live pehle, phir upcoming, phir final (page ke andar)
+    // Live first, then upcoming, then final (within the page)
     .sort((x, y) => (rank[x.status] ?? 9) - (rank[y.status] ?? 9));
 
   res.status(200).json({
@@ -368,12 +403,14 @@ router.get('/:id', protect, wrap('Battle detail', async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 400, 'Invalid battle id');
 
   const battle = await Battle.findById(req.params.id)
-    .populate('challengerTeam', 'name tag logo captain members')
-    .populate('opponentTeam',   'name tag logo captain members')
+    .populate({ path: 'challengerTeam', select: 'name tag logo captain members', populate: { path: 'members', select: 'name' } })
+    .populate({ path: 'opponentTeam',   select: 'name tag logo captain members', populate: { path: 'members', select: 'name' } })
     .populate('challengerCaptain', 'name')
     .populate('opponentCaptain',   'name')
     .populate('cutEvents.claimedBy', 'name')
-    .populate('cutEvents.cutPlayer', 'name');
+    .populate('cutEvents.cutPlayer', 'name')
+    .populate('cutEvents.winners', 'name')
+    .populate('cutEvents.losers', 'name');
 
   if (!battle) return fail(res, 404, 'Battle not found.');
 
@@ -381,7 +418,7 @@ router.get('/:id', protect, wrap('Battle detail', async (req, res) => {
 }));
 
 // ==================== @POST /api/battles/:id/accept ====================
-// Opponent captain challenge accept karta hai
+// The opponent captain accepts the challenge
 router.post('/:id/accept', protect, wrap('Accept challenge', async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 400, 'Invalid battle id');
 
@@ -402,29 +439,29 @@ router.post('/:id/accept', protect, wrap('Accept challenge', async (req, res) =>
   battle.acceptedAt = new Date();
   await battle.save();
 
-  // Challenger captain ko notification - schedule info bhi batao
+  // Notification to the challenger captain - include the schedule info too
   const schedText = battle.scheduledAt
     ? ` Match schedule: ${new Date(battle.scheduledAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}.`
     : '';
   await Notification.send(
     battle.challengerCaptain,
     'battle_accepted',
-    `${myTeam.name} ne challenge accept kar liya! 🎉`,
-    `Dono captains ab "Start Battle" dabayein to match LIVE ho jayega.${schedText}`,
+    `${myTeam.name} accepted the challenge! 🎉`,
+    `Both captains now need to press "Start Battle" and the match will go LIVE.${schedText}`,
     'Battle',
     battle._id
   );
 
   res.status(200).json({
     success: true,
-    message: `Challenge accepted! Dono captains "Start Battle" dabayein to match shuru hoga.`,
+    message: `Challenge accepted! The match will begin once both captains press "Start Battle".`,
     battle: battleDetail(battle, req.user._id),
   });
 }));
 
 // ==================== @POST /api/battles/:id/reject ====================
-// Opponent captain challenge reject karta hai (pending status mein)
-// Challenger captain ko notification jaati hai
+// The opponent captain rejects the challenge (while pending)
+// A notification goes to the challenger captain
 router.post('/:id/reject', protect, wrap('Reject challenge', async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 400, 'Invalid battle id');
 
@@ -437,7 +474,7 @@ router.post('/:id/reject', protect, wrap('Reject challenge', async (req, res) =>
   }
 
   const uid = sid(req.user._id);
-  // Sirf opponent team ka captain reject kar sakta hai
+  // Only the captain of the opponent team can reject
   const isOppCaptain = isCaptainOfTeam(battle.opponentTeam, uid);
   if (!isOppCaptain) {
     return fail(res, 403, 'Only the opponent captain can reject this challenge.');
@@ -445,30 +482,30 @@ router.post('/:id/reject', protect, wrap('Reject challenge', async (req, res) =>
 
   const { reason = '' } = req.body;
   battle.status = 'cancelled';
-  battle.opponentCaptain = req.user._id; // record karo kisne reject kiya
+  battle.opponentCaptain = req.user._id; // record who rejected
   await battle.save();
 
-  // Challenger captain ko rejection notification
+  // Rejection notification to the challenger captain
   const oppName = battle.opponentTeam.name || 'Opponent';
   const reasonText = reason.trim() ? ` Reason: ${reason.trim()}` : '';
   await Notification.send(
     battle.challengerCaptain,
     'battle_rejected',
     `${oppName} rejected your challenge`,
-    `${oppName} ne aapka battle challenge decline kar diya.${reasonText}`,
+    `${oppName} declined your battle challenge.${reasonText}`,
     'Battle',
     battle._id
   );
 
   res.status(200).json({
     success: true,
-    message: `Challenge rejected. ${battle.challengerTeam.name} ko notify kar diya gaya.`,
+    message: `Challenge rejected. ${battle.challengerTeam.name} has been notified.`,
   });
 }));
 
 // ==================== @POST /api/battles/:id/cancel ====================
-// Pending/accepted challenge cancel karo (challenger ya opponent captain)
-// Note: Opponent "Decline" = /reject use karo. Cancel = apni taraf se wapas lena.
+// Cancel a pending/accepted challenge (challenger or opponent captain)
+// Note: For opponent "Decline" use /reject. Cancel = withdrawing from your own side.
 router.post('/:id/cancel', protect, wrap('Cancel battle', async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 400, 'Invalid battle id');
 
@@ -491,7 +528,7 @@ router.post('/:id/cancel', protect, wrap('Cancel battle', async (req, res) => {
   battle.status = 'cancelled';
   await battle.save();
 
-  // Dusri side ko cancel notification
+  // Cancel notification to the other side
   const myName = isChallCaptain
     ? (battle.challengerTeam.name || 'Challenger')
     : (battle.opponentTeam.name   || 'Opponent');
@@ -501,8 +538,8 @@ router.post('/:id/cancel', protect, wrap('Cancel battle', async (req, res) => {
     await Notification.send(
       notifyUser,
       'battle_cancelled',
-      `${myName} ne battle cancel kar diya`,
-      `${myName} ne upcoming battle cancel kar diya hai.`,
+      `${myName} cancelled the battle`,
+      `${myName} has cancelled the upcoming battle.`,
       'Battle',
       battle._id
     );
@@ -512,8 +549,8 @@ router.post('/:id/cancel', protect, wrap('Cancel battle', async (req, res) => {
 }));
 
 // ==================== @POST /api/battles/:id/ready ====================
-// Captain "Accept & start battle" dabata hai (dono ready = live)
-// Pehle challenger, fir opponent (ya ulta) - dono ready hone par status = live
+// The captain presses "Accept & start battle" (both ready = live)
+// First the challenger, then the opponent (or vice versa) - status = live once both are ready
 router.post('/:id/ready', protect, wrap('Ready/Start battle', async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 400, 'Invalid battle id');
 
@@ -528,15 +565,25 @@ router.post('/:id/ready', protect, wrap('Ready/Start battle', async (req, res) =
   const role = getBattleRole(battle, req.user._id);
   if (!role) return fail(res, 403, 'Only a battle captain can start the battle.');
 
+  const chCount = (battle.challengerTeam.members || []).length;
+  const opCount = (battle.opponentTeam.members   || []).length;
+  if (chCount < MIN_PLAYERS || opCount < MIN_PLAYERS) {
+    return fail(
+      res, 400,
+      `At least ${MIN_PLAYERS} players are required in both teams to start the match ` +
+      `(${battle.challengerTeam.name}: ${chCount}, ${battle.opponentTeam.name}: ${opCount}).`
+    );
+  }
+
   if (role === 'challenger') battle.challengerReady = true;
   else                        battle.opponentReady   = true;
 
-  // Dono ready hone par live
+  // Live once both are ready
   if (battle.challengerReady && battle.opponentReady) {
     battle.status    = 'live';
     battle.startedAt = new Date();
 
-    // Dono teams ke sare members ko notification
+    // Notification to all members of both teams
     const allMemberIds = [
       ...(battle.challengerTeam.members || []),
       ...(battle.opponentTeam.members   || []),
@@ -564,41 +611,68 @@ router.post('/:id/ready', protect, wrap('Ready/Start battle', async (req, res) =
 }));
 
 // ==================== @POST /api/battles/:id/claim-cut ====================
-// Captain apni team ki kite cut claim karta hai (+100 score request)
-// body: { cutPlayerId? } - optional: konse player ne kiya
+// The captain claims a kite cut for their team (+100 score request)
+// body: { cutPlayerId? } - optional: which player made the cut
 router.post('/:id/claim-cut', protect, wrap('Claim cut', async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 400, 'Invalid battle id');
 
-  const battle = await Battle.findById(req.params.id);
+  const battle = await Battle.findById(req.params.id)
+    .populate('challengerTeam', 'members name')
+    .populate('opponentTeam',   'members name');
   if (!battle) return fail(res, 404, 'Battle not found.');
   if (battle.status !== 'live') return fail(res, 400, 'Battle is not live.');
 
   const role = getBattleRole(battle, req.user._id);
   if (!role) return fail(res, 403, 'Only a battle captain can claim a cut.');
 
-  const myTeamId = role === 'challenger' ? battle.challengerTeam : battle.opponentTeam;
-  const { cutPlayerId } = req.body;
+  const myTeam  = role === 'challenger' ? battle.challengerTeam : battle.opponentTeam;
+  const oppTeam = role === 'challenger' ? battle.opponentTeam   : battle.challengerTeam;
 
-  const cutEvent = {
+  // Bout: winnerPlayerIds = players of our team who won, loserPlayerIds = players of the opposing team who lost.
+  // The old client only sent cutPlayerId, let that work too (treat it as the winner).
+  const asIds = (v) => [...new Set((Array.isArray(v) ? v : []).map(String))];
+  let winnerIds = asIds(req.body.winnerPlayerIds);
+  const loserIds = asIds(req.body.loserPlayerIds);
+  const legacy = req.body.cutPlayerId;
+  if (!winnerIds.length && legacy && mongoose.isValidObjectId(legacy)) winnerIds = [String(legacy)];
+
+  if (!winnerIds.length || !loserIds.length) {
+    return fail(res, 400, 'Select at least one winning player (from your team) and one losing player (from the opposing team).');
+  }
+  const myMembers  = new Set((myTeam.members  || []).map(sid));
+  const oppMembers = new Set((oppTeam.members || []).map(sid));
+  if (!winnerIds.every((id) => mongoose.isValidObjectId(id) && myMembers.has(id))) {
+    return fail(res, 400, 'Winning players must be members of your own team.');
+  }
+  if (!loserIds.every((id) => mongoose.isValidObjectId(id) && oppMembers.has(id))) {
+    return fail(res, 400, 'Losing players must be members of the opposing team.');
+  }
+
+  battle.cutEvents.push({
     claimedBy:     req.user._id,
-    claimedByTeam: myTeamId,
-    cutPlayer:     (cutPlayerId && mongoose.isValidObjectId(cutPlayerId)) ? cutPlayerId : null,
+    claimedByTeam: myTeam._id,
+    cutPlayer:     winnerIds[0],
+    winners:       winnerIds,
+    losers:        loserIds,
     status:        'pending',
-  };
-
-  battle.cutEvents.push(cutEvent);
+  });
   await battle.save();
 
   const newCut = battle.cutEvents[battle.cutEvents.length - 1];
 
-  // Opponent captain ko notification
+  // To show names in the notification
+  const named = await User.find({ _id: { $in: [...winnerIds, ...loserIds] } }).select('name').lean();
+  const nameOf = Object.fromEntries(named.map((u) => [String(u._id), u.name]));
+  const join = (ids) => ids.map((i) => nameOf[i] || 'Player').join(', ');
+
+  // Notification to the opponent captain
   const oppCaptainId = role === 'challenger' ? battle.opponentCaptain : battle.challengerCaptain;
   if (oppCaptainId) {
     await Notification.send(
       oppCaptainId,
       'cut_claimed',
       'Kite Cut Claimed! ✂️',
-      'Opponent claims a kite cut. Approve or reject it.',
+      `${myTeam.name}: ${join(winnerIds)} defeated ${join(loserIds)}. Approve or reject.`,
       'Battle',
       battle._id
     );
@@ -609,7 +683,7 @@ router.post('/:id/claim-cut', protect, wrap('Claim cut', async (req, res) => {
     message: 'Cut claimed! Waiting for opponent captain to approve.',
     cut: {
       id:            newCut._id,
-      claimedByTeam: myTeamId,
+      claimedByTeam: myTeam._id,
       status:        'pending',
       createdAt:     newCut.createdAt,
     },
@@ -617,7 +691,7 @@ router.post('/:id/claim-cut', protect, wrap('Claim cut', async (req, res) => {
 }));
 
 // ==================== @POST /api/battles/:id/cuts/:cutId/respond ====================
-// Opponent captain cut approve ya reject karta hai
+// The opponent captain approves or rejects the cut
 // body: { action: 'approve' | 'reject', reason?: string }
 router.post('/:id/cuts/:cutId/respond', protect, wrap('Respond cut', async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id))    return fail(res, 400, 'Invalid battle id');
@@ -636,7 +710,7 @@ router.post('/:id/cuts/:cutId/respond', protect, wrap('Respond cut', async (req,
   if (!cut) return fail(res, 404, 'Cut event not found.');
   if (cut.status !== 'pending') return fail(res, 400, 'This cut has already been resolved.');
 
-  // Sirf opponent ki side ka captain respond kar sakta hai
+  // Only the captain of the opponent side can respond
   const claimerRole = sid(cut.claimedByTeam) === sid(battle.challengerTeam) ? 'challenger' : 'opponent';
   const responderRole = claimerRole === 'challenger' ? 'opponent' : 'challenger';
   const myRole = getBattleRole(battle, req.user._id);
@@ -656,7 +730,7 @@ router.post('/:id/cuts/:cutId/respond', protect, wrap('Respond cut', async (req,
 
   await battle.save();
 
-  // Claimant captain ko notification
+  // Notification to the claimant captain
   const claimantCaptainId = claimerRole === 'challenger' ? battle.challengerCaptain : battle.opponentCaptain;
   const notifType = action === 'approve' ? 'cut_approved' : 'cut_rejected';
   await Notification.send(
@@ -678,8 +752,8 @@ router.post('/:id/cuts/:cutId/respond', protect, wrap('Respond cut', async (req,
 }));
 
 // ==================== @POST /api/battles/:id/end ====================
-// Captain battle end karta hai
-// Winner auto-decide: jis side ke cuts zyada us ka win, equal = tie
+// The captain ends the battle
+// Winner is decided automatically: the side with more cuts wins, equal = tie
 router.post('/:id/end', protect, wrap('End battle', async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 400, 'Invalid battle id');
 
@@ -692,7 +766,7 @@ router.post('/:id/end', protect, wrap('End battle', async (req, res) => {
   const role = getBattleRole(battle, req.user._id);
   if (!role) return fail(res, 403, 'Only a battle captain can end the battle.');
 
-  // Winner decide karo
+  // Decide the winner
   let winner = 'tie';
   if (battle.challengerCuts > battle.opponentCuts) winner = 'challenger';
   else if (battle.opponentCuts > battle.challengerCuts) winner = 'opponent';
@@ -702,24 +776,22 @@ router.post('/:id/end', protect, wrap('End battle', async (req, res) => {
   battle.endedAt = new Date();
   await battle.save();
 
-  // Team stats update karo
+  // Update team stats
   const challResult = winner === 'challenger' ? 'W' : winner === 'tie' ? 'T' : 'L';
   const oppResult   = winner === 'opponent'   ? 'W' : winner === 'tie' ? 'T' : 'L';
 
-  // playerCuts object banao (pending cuts ignore, sirf approved)
+  // Build the playerCuts object (ignore pending cuts, only approved).
+  // Winning player gets +1 cut, losing player gets 0 (but their matchesPlayed increases).
   const approvedCuts = battle.cutEvents.filter((c) => c.status === 'approved');
   const challPlayerCuts = {};
   const oppPlayerCuts   = {};
   for (const c of approvedCuts) {
-    if (sid(c.claimedByTeam) === sid(battle.challengerTeam._id)) {
-      if (c.cutPlayer) {
-        challPlayerCuts[sid(c.cutPlayer)] = (challPlayerCuts[sid(c.cutPlayer)] || 0) + 1;
-      }
-    } else {
-      if (c.cutPlayer) {
-        oppPlayerCuts[sid(c.cutPlayer)] = (oppPlayerCuts[sid(c.cutPlayer)] || 0) + 1;
-      }
-    }
+    const winnerIsChall = sid(c.claimedByTeam) === sid(battle.challengerTeam._id);
+    const winMap  = winnerIsChall ? challPlayerCuts : oppPlayerCuts;
+    const loseMap = winnerIsChall ? oppPlayerCuts   : challPlayerCuts;
+    const winners = (c.winners && c.winners.length) ? c.winners : (c.cutPlayer ? [c.cutPlayer] : []);
+    for (const w of winners) winMap[sid(w)] = (winMap[sid(w)] || 0) + 1;
+    for (const l of (c.losers || [])) loseMap[sid(l)] = loseMap[sid(l)] || 0;
   }
 
   await Promise.all([
@@ -748,7 +820,7 @@ router.post('/:id/end', protect, wrap('End battle', async (req, res) => {
     User.updateMany({ team: battle.opponentTeam._id   }, { $inc: { 'stats.matches': 1, ...(oppResult   === 'W' ? { 'stats.wins': 1 } : {}) } }),
   ]);
 
-  // Dono teams ke members ko notification
+  // Notification to the members of both teams
   const [challTeamFull, oppTeamFull] = await Promise.all([
     Team.findById(battle.challengerTeam._id).select('members'),
     Team.findById(battle.opponentTeam._id).select('members'),

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../utils/app_theme.dart';
 
-/// Date / naam formatting (intl package ki zaroorat nahi)
+/// Date / name formatting (no need for the intl package)
 class MatchFmt {
   static const _days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -77,7 +77,7 @@ class MatchStatusPill extends StatelessWidget {
   }
 }
 
-/// Home "Matches near you" aur Matches tab ka card. Data: /api/battles/nearby ka ek battle.
+/// Card for Home "Matches near you" and the Matches tab. Data: one battle from /api/battles/nearby.
 class MatchCard extends StatelessWidget {
   final Map<String, dynamic> match;
   final double? width;

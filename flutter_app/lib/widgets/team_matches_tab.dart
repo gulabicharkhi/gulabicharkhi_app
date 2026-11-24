@@ -5,7 +5,7 @@ import '../screens/match_detail_screen.dart';
 import 'team_widgets.dart';
 import 'match_card.dart';
 
-/// Team page > Matches tab: is team ke saare battles (FINAL / LIVE / UPCOMING).
+/// Team page > Matches tab: all battles of this team (FINAL / LIVE / UPCOMING).
 class TeamMatchesTab extends StatefulWidget {
   final String teamId;
   const TeamMatchesTab({super.key, required this.teamId});
@@ -32,7 +32,7 @@ class _TeamMatchesTabState extends State<TeamMatchesTab> {
     final res = await TeamService.matches(widget.teamId);
     if (!mounted) return;
     if (res['success'] != true) {
-      setState(() => _error = (res['message'] ?? 'Matches load nahi hue').toString());
+      setState(() => _error = (res['message'] ?? 'Could not load matches').toString());
       return;
     }
     setState(() => _matches = TeamService.asList(res['matches']));

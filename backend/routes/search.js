@@ -13,8 +13,8 @@ const MIN_LEN = 2;
 const PER_SECTION = 5;
 
 // ==================== @GET /api/search?q=kite ====================
-// Home screen search bar: matches, venues, teams, players - sab ek hi call mein.
-// Har section max 5 results. q kam se kam 2 letters ka hona chahiye.
+// Home screen search bar: matches, venues, teams, players - all in a single call.
+// Each section returns at most 5 results. q must be at least 2 letters.
 router.get('/', protect, async (req, res) => {
   try {
     const q = String(req.query.q || '').trim().slice(0, 50);
@@ -35,7 +35,7 @@ router.get('/', protect, async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(PER_SECTION);
 
-    // Players - verified users, apna khud ka naam nahi. Email/phone kabhi nahi bhejte.
+    // Players - verified users, not your own name. Email/phone are never sent.
     const playersP = User.find({
       _id: { $ne: req.user._id },
       isVerified: true,
@@ -45,7 +45,7 @@ router.get('/', protect, async (req, res) => {
       .populate('team', 'name tag')
       .limit(PER_SECTION);
 
-    // Matches - venue/area ya kisi team ke naam/tag se match
+    // Matches - matched by venue/area or by a team name/tag
     const matchesP = (async () => {
       const teamIds = await Team.find({ $or: [{ name: re }, { tag: re }] })
         .select('_id')
@@ -68,7 +68,7 @@ router.get('/', protect, async (req, res) => {
       return battles;
     })();
 
-    // Venues - jin battles mein venue/area match hua unke unique venues
+    // Venues - unique venues of the battles whose venue/area matched
     const venuesP = Battle.aggregate([
       {
         $match: {

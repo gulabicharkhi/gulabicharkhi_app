@@ -1,5 +1,5 @@
 // ============================================================
-// server.js — UPDATED: Firebase Admin SDK initialize hota hai start par
+// server.js — UPDATED: Firebase Admin SDK is initialized on startup
 // ============================================================
 
 const express  = require('express');
@@ -10,7 +10,7 @@ const dotenv   = require('dotenv');
 dotenv.config();
 
 const { verifyEmailSetup } = require('./config/emailService');
-const { initFirebase }     = require('./config/firebase'); // <-- NAYA
+const { initFirebase }     = require('./config/firebase'); // <-- NEW
 
 const app = express();
 
@@ -28,7 +28,7 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/gulabi_ch
   .catch(err => console.error('❌ MongoDB error:', err));
 
 // ==================== FIREBASE INIT ====================
-initFirebase(); // push notifications setup karo
+initFirebase(); // set up push notifications
 
 // ==================== ROUTES ====================
 app.use('/api/auth',          require('./routes/auth'));
@@ -94,10 +94,10 @@ app.get('/join/:code', (req, res) => {
   <div class="card">
     <div class="logo">🪁</div>
     <h1>${appName}</h1>
-    <p class="sub">Team join karne ke liye invite mili hai</p>
+    <p class="sub">You have been invited to join a team</p>
     <div class="code-box">${code}</div>
-    <a class="btn btn-primary" id="openApp" href="${appDeepLink}">App mein kholein</a>
-    <p class="divider">— App nahi hai? —</p>
+    <a class="btn btn-primary" id="openApp" href="${appDeepLink}">Open in App</a>
+    <p class="divider">— Don't have the app? —</p>
     <div class="stores">
       <a href="${playStoreUrl}" class="btn btn-outline">📱 Play Store</a>
       <a href="${appStoreUrl}"  class="btn btn-outline">🍎 App Store</a>

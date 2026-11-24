@@ -73,7 +73,7 @@ class _MatchesScreenState extends State<MatchesScreen>
     if (!mounted) return;
     if (res['success'] != true) {
       setState(() {
-        _error = (res['message'] ?? 'Matches load nahi hue').toString();
+        _error = (res['message'] ?? 'Could not load matches').toString();
         _loading = false;
         _loadingMore = false;
       });
@@ -157,7 +157,7 @@ class _MatchesScreenState extends State<MatchesScreen>
                         fontSize: 22,
                         fontWeight: FontWeight.w900)),
                 Text(
-                  _city.isEmpty ? 'Saari cities' : 'Near $_city',
+                  _city.isEmpty ? 'All cities' : 'Near $_city',
                   style: const TextStyle(color: Colors.white70, fontSize: 13),
                 ),
               ],
@@ -333,7 +333,7 @@ class _MatchesScreenState extends State<MatchesScreen>
               size: 60, color: Color(0xFFDDBBDD)),
           const SizedBox(height: 12),
           Text(
-            'Koi ${_labels[_tab.index].toLowerCase()} match nahi',
+            'No ${_labels[_tab.index].toLowerCase()} matches',
             style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
@@ -342,8 +342,8 @@ class _MatchesScreenState extends State<MatchesScreen>
           const SizedBox(height: 6),
           Text(
             _city.isEmpty
-                ? 'Captain kisi team ko challenge karega to yahan dikhega.'
-                : '$_city mein koi match nahi. "All cities" try karo.',
+                ? 'It will show up here when a captain challenges a team.'
+                : 'No matches in $_city. Try "All cities".',
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 13, color: Color(0xFF9E9E9E)),
           ),
@@ -351,7 +351,7 @@ class _MatchesScreenState extends State<MatchesScreen>
           ElevatedButton.icon(
             onPressed: _openArena,
             icon: const Icon(Icons.sports_kabaddi_rounded, size: 18),
-            label: const Text('Battle Arena kholo'),
+            label: const Text('Open Battle Arena'),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFE93D95),
               foregroundColor: Colors.white,

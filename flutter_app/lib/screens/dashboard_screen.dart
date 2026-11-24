@@ -35,7 +35,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final _searchCtrl = TextEditingController();
   final _searchFocus = FocusNode();
   Timer? _debounce;
-  int _searchSeq = 0; // purane (late aaye) responses ignore karne ke liye
+  int _searchSeq = 0; // to ignore old (late-arriving) responses
   String _query = '';
   bool _searchLoading = false;
   String? _searchError;
@@ -65,9 +65,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _loadUser();
-    // App khulte hi FCM token server par sync (pehle se login users ke liye bhi)
+    // Sync the FCM token to the server as soon as the app opens (also for already logged-in users)
     NotificationService.registerToken();
-    // Mausam har 15 minute me refresh
+    // Weather refreshes every 15 minutes
     _weatherTimer = Timer.periodic(
       const Duration(minutes: 15),
       (_) => _loadWeather(force: true),
@@ -90,7 +90,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _loadWeather();
       _loadMatches();
     }
-    // Server se latest (team wagairah) - fail ho to local data chalega
+    // Latest from the server (team etc.) - if it fails, local data is used
     final fresh = await AuthService.refreshMe();
     if (fresh != null && mounted) {
       setState(() => _user = fresh);
@@ -100,7 +100,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   // ------------------------------------------------------------------
-  // Matches near you (live + upcoming, user ki city me)
+  // Matches near you (live + upcoming, in the user's city)
   // ------------------------------------------------------------------
   Future<void> _loadMatches({bool force = false}) async {
     final city = (_user?['city'] ?? '').toString().trim();
@@ -118,7 +118,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final upcoming = results[1];
     if (live['success'] != true && upcoming['success'] != true) {
       setState(() {
-        _matchesError = (live['message'] ?? upcoming['message'] ?? 'Matches load nahi hue').toString();
+        _matchesError = (live['message'] ?? upcoming['message'] ?? 'Could not load matches').toString();
         _matchesLoading = false;
       });
       return;
@@ -142,7 +142,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       context,
       MaterialPageRoute(builder: (_) => MatchDetailScreen(matchId: m['id'].toString())),
     );
-    if (mounted) _loadMatches(force: true); // score badla ho sakta hai
+    if (mounted) _loadMatches(force: true); // the score may have changed
   }
 
   // ------------------------------------------------------------------
@@ -162,7 +162,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (!mounted || city != _weatherCity) return;
       setState(() => _weather = w);
     } catch (_) {
-      // chip "Weather" hi rahega; sheet kholne par error + retry dikhega
+      // the chip will remain "Weather"; on opening the sheet, an error + retry will be shown
     }
   }
 
@@ -180,7 +180,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _query = v;
       _searchError = null;
       if (q.length < SearchService.minLength) {
-        _searchSeq++; // chal rahi request ka result ignore
+        _searchSeq++; // ignore the result of the request in progress
         _searchData = null;
         _searchLoading = false;
       } else {
@@ -202,7 +202,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _searchData = res;
         _searchError = null;
       } else {
-        _searchError = (res['message'] ?? 'Search nahi ho paya').toString();
+        _searchError = (res['message'] ?? 'Could not complete the search').toString();
       }
     });
   }
@@ -226,7 +226,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       context,
       MaterialPageRoute(builder: (_) => TeamDetailScreen(teamId: id)),
     );
-    if (mounted) _loadUser(); // join/leave hua ho to refresh
+    if (mounted) _loadUser(); // refresh if someone joined/left
   }
 
   // ------------------------------------------------------------------
@@ -262,7 +262,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return PopScope(
       canPop: !_searchActive,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _clearSearch(); // back dabane par pehle search band
+        if (!didPop) _clearSearch(); // on back press, close search first
       },
       child: Scaffold(
       backgroundColor: _pageBg,
@@ -383,7 +383,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                     ),
                     Text(
-                      'गुलाबी चरखी • Kite Battle Arena',
+                      'Pink Spool • Kite Battle Arena',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(color: Colors.white70, fontSize: 11.5),
@@ -696,7 +696,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (_matchesLoading && _matches.isEmpty) {
       sub = 'Loading...';
     } else if (_matches.isEmpty) {
-      sub = city.isEmpty ? 'Koi match nahi mila' : 'Abhi $city me koi match nahi';
+      sub = city.isEmpty ? 'No matches found' : 'No matches in $city right now';
     } else {
       sub = '$_liveCount live • $_upcomingCount upcoming${city.isEmpty ? '' : ' in $city'}';
     }
@@ -751,7 +751,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (_matches.isEmpty) {
       return _matchesMessage(
         Icons.sports_score_rounded,
-        'Abhi koi live ya upcoming match nahi. Team ka captain kisi team ko challenge karega to yahan dikhega.',
+        'There are no live or upcoming matches right now. It will show up here when a team captain challenges a team.',
       );
     }
     return SizedBox(
@@ -836,10 +836,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   // ------------------------------------------------------------------
-  // Bottom nav (beech mein ubhra hua Matches button)
+  // Bottom nav (Matches button raised in the middle)
   // ------------------------------------------------------------------
   Widget _buildBottomNav(double bottomInset) {
-    const lift = 28.0; // center button kitna bahar nikla hai
+    const lift = 28.0; // how far the center button sticks out
     return SizedBox(
       height: _navHeight + bottomInset + lift,
       child: Stack(
@@ -868,7 +868,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 children: [
                   _navItem(0, 'Home', Icons.home_outlined, Icons.home_rounded),
                   _navItem(1, 'Register', Icons.group_add_outlined, Icons.group_add_rounded),
-                  const Expanded(child: SizedBox()), // center ke liye jagah
+                  const Expanded(child: SizedBox()), // space for the center button
                   _navItem(3, 'Teams', Icons.workspace_premium_outlined,
                       Icons.workspace_premium_rounded),
                   _navItem(4, 'Association', Icons.business_center_outlined,

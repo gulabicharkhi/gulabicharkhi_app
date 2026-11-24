@@ -2,11 +2,11 @@
 // Demo data seed: teams + captains + LIVE / UPCOMING / FINAL matches
 //
 //   cd backend
-//   npm run seed            -> demo data banao (purana demo data hata kar)
-//   npm run seed:clear      -> sirf demo data hata do
+//   npm run seed            -> create demo data (after removing the old demo data)
+//   npm run seed:clear      -> remove only the demo data
 //
-// Demo users ka password: Demo@1234   (email verified hain, seedha login ho jata hai)
-// Captains (login karke challenge / accept / start / cut claim / end test karo):
+// Demo users password: Demo@1234   (emails are verified, so you can log in directly)
+// Captains (log in and test challenge / accept / start / cut claim / end):
 //   jpb.captain@demo.gc.test   -> Jaipur Patangbaaz   (JPB)
 //   pcc.captain@demo.gc.test   -> Pink City Cutters   (PCC)
 //   aff.captain@demo.gc.test   -> Amer Fort Flyers    (AFF)
@@ -90,7 +90,7 @@ async function main() {
   console.log(`👥 Created ${TEAMS.length} teams`);
 
   // ---------- Battle helper ----------
-  // events: [['c'|'o', 'approved'|'rejected'|'pending', playerIndex?]]  c = challenger ne claim kiya
+  // events: [['c'|'o', 'approved'|'rejected'|'pending', playerIndex?]]  c = claimed by the challenger
   const makeBattle = async ({ ch, op, status, venue, area, coords, cCuts = 0, oCuts = 0, events = [], startedAgoMin, endedAgoMin, ready }) => {
     const C = T[ch], O = T[op];
     const b = new Battle({
@@ -119,7 +119,7 @@ async function main() {
     b.challengerCuts = cCuts;
     b.opponentCuts = oCuts;
 
-    // Cut events (live feed) - approved wale score se match karte hain
+    // Cut events (live feed) - the approved ones match the score
     let approvedC = 0, approvedO = 0;
     const evs = events.length ? events : [
       ...Array.from({ length: cCuts }, () => ['c', 'approved']),
@@ -133,7 +133,7 @@ async function main() {
         claimedByTeam: claimer.team._id,
         cutPlayer: player._id,
         status: st,
-        rejectionReason: st === 'rejected' ? 'Manjha touch hua, cut nahi tha' : '',
+        rejectionReason: st === 'rejected' ? 'Manjha only touched, it was not a cut' : '',
         createdAt: minsAgo(25 - i * 2),
         resolvedAt: st === 'pending' ? null : minsAgo(24 - i * 2),
       });
@@ -142,7 +142,7 @@ async function main() {
     if (events.length) { b.challengerCuts = approvedC; b.opponentCuts = approvedO; }
     await b.save();
 
-    // Final match ka result team stats me bhi (leaderboard ke liye)
+    // Also record the final match result in team stats (for the leaderboard)
     if (status === 'final') {
       const res = b.winner === 'challenger' ? ['W', 'L'] : b.winner === 'opponent' ? ['L', 'W'] : ['T', 'T'];
       const per = (side) => {
@@ -159,14 +159,14 @@ async function main() {
     return b;
   };
 
-  // ---------- FINAL (pehle, taaki history bane) ----------
+  // ---------- FINAL (first, so that history is built) ----------
   await makeBattle({ ch: 'jpb', op: 'aff', status: 'final', venue: 'Amer Road Ground', area: 'Amer, Jaipur', coords: JAIPUR.amer, cCuts: 7, oCuts: 4, startedAgoMin: 300, endedAgoMin: 240 });
   await makeBattle({ ch: 'pcc', op: 'jjt', status: 'final', venue: 'Jhalana Ground', area: 'Jhalana, Jaipur', coords: JAIPUR.jhalana, cCuts: 3, oCuts: 6, startedAgoMin: 200, endedAgoMin: 150 });
   await makeBattle({ ch: 'mmj', op: 'pcc', status: 'final', venue: 'Malviya Nagar Terrace', area: 'Malviya Nagar, Jaipur', coords: JAIPUR.malviya, cCuts: 5, oCuts: 5, startedAgoMin: 120, endedAgoMin: 80 });
   await makeBattle({ ch: 'ddd', op: 'ccc', status: 'final', venue: 'Red Fort Maidan', area: 'Old Delhi, Delhi', cCuts: 8, oCuts: 2, startedAgoMin: 400, endedAgoMin: 340 });
 
   // ---------- LIVE ----------
-  // Jaipur Patangbaaz vs Pink City Cutters: ek cut pending (PCC captain approve/reject kar sakta hai)
+  // Jaipur Patangbaaz vs Pink City Cutters: one cut is pending (the PCC captain can approve/reject)
   await makeBattle({
     ch: 'jpb', op: 'pcc', status: 'live', venue: 'Jhalana Ground', area: 'Jhalana, Jaipur', coords: JAIPUR.jhalana, startedAgoMin: 30,
     events: [['c', 'approved'], ['o', 'approved'], ['c', 'approved'], ['c', 'rejected'], ['o', 'approved'], ['c', 'approved'], ['c', 'pending']],
@@ -180,11 +180,11 @@ async function main() {
   });
 
   // ---------- UPCOMING ----------
-  // pending: MMJ ne JPB ko challenge bheja (JPB captain accept kar sakta hai)
+  // pending: MMJ sent a challenge to JPB (the JPB captain can accept)
   await makeBattle({ ch: 'mmj', op: 'jpb', status: 'pending', venue: 'Malviya Nagar Terrace', area: 'Malviya Nagar, Jaipur', coords: JAIPUR.malviya });
-  // pending: JJT ne MMJ ko challenge bheja
+  // pending: JJT sent a challenge to MMJ
   await makeBattle({ ch: 'jjt', op: 'mmj', status: 'pending', venue: 'Mansarovar Ground', area: 'Mansarovar, Jaipur', coords: JAIPUR.mansarovar });
-  // accepted: AFF captain ready, PCC captain ka wait (PCC captain "Start" dabaye to live)
+  // accepted: AFF captain ready, waiting for the PCC captain (goes live when the PCC captain presses "Start")
   await makeBattle({ ch: 'aff', op: 'mmj', status: 'accepted', ready: 'challenger', venue: 'Amer Road Ground', area: 'Amer, Jaipur', coords: JAIPUR.amer });
   await makeBattle({ ch: 'aut', op: 'ddd', status: 'accepted', ready: 'none', venue: 'Sabarmati Riverfront', area: 'Ahmedabad' });
 
@@ -192,7 +192,7 @@ async function main() {
   console.log(`🪁 Battles -> live:${counts[0]} pending:${counts[1]} accepted:${counts[2]} final:${counts[3]}`);
   console.log('\n🔑 Login (password: ' + PASSWORD + ')');
   TEAMS.forEach((t) => console.log(`   ${t.tag}  ${t.key}.captain@${DOMAIN}   (${t.city})`));
-  console.log('\nDone ✅  App me Jaipur wale captain se login karke Matches tab kholo.');
+  console.log('\nDone ✅  Log in as the Jaipur captain in the app and open the Matches tab.');
 }
 
 main()
