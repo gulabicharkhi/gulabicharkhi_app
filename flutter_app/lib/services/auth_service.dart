@@ -1,24 +1,21 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
-  // ⚠️ REAL PHONE par test kar rahe ho to yahan apne PC ka IP daalo, e.g. '192.168.1.5'
-  // (phone aur PC same WiFi par hone chahiye). Emulator / web par khaali chhod do.
-  // static const String lanHost = '';
-  static const String lanHost = '192.168.0.150';
+  // ✅ PRODUCTION: Live Render backend
+  // Local testing ke liye: lanHost mein apna PC ka IP daalo aur _useLocal = true karo.
+  static const String _liveUrl = 'https://gulabicharkhi-app.onrender.com/api';
+
+  // --- Local dev override (sirf development ke liye) ---
+  static const bool _useLocal = false;        // true karo to LAN se connect ho
+  static const String lanHost = '192.168.0.150'; // apna PC ka IP yahan
+  static const int lanPort = 5000;
 
   static String get baseUrl {
-    if (lanHost.isNotEmpty) return 'http://$lanHost:5000/api';
-    if (kIsWeb) return 'http://localhost:5000/api';
-    // Android emulator mein "localhost" = emulator khud. PC ke liye 10.0.2.2 use hota hai.
-    if (defaultTargetPlatform == TargetPlatform.android) {
-     return 'http://localhost:5000/api';
-
-    }
-    return 'http://localhost:5000/api';
+    if (_useLocal && lanHost.isNotEmpty) return 'http://$lanHost:$lanPort/api';
+    return _liveUrl;
   }
 
   static const _timeout = Duration(seconds: 25);
