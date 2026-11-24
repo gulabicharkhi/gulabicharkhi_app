@@ -84,79 +84,43 @@ class _BattleArenaScreenState extends State<BattleArenaScreen> {
 
   // ── challenge dialog ─────────────────────────────────────────────────────
   Future<void> _challengeDialog(Map<String, dynamic> team) async {
-    final venueCtl = TextEditingController();
-    final areaCtl  = TextEditingController();
-    DateTime? pickedDate;
-    TimeOfDay? pickedTime;
-
+    // Controllers ab sheet ke andar bante/dispose hote hain (crash fix)
     final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => _ChallengeSheet(
         teamName: (team['name'] ?? '').toString(),
-        venueCtl: venueCtl,
-        areaCtl:  areaCtl,
-        onPickDate: (d) => pickedDate = d,
-        onPickTime: (t) => pickedTime = t,
       ),
     );
 
-    venueCtl.dispose();
-    areaCtl.dispose();
-    if (result == null) return;
+    if (result == null || !mounted) return;
 
+    final pickedDate = result['date'] as DateTime?;
+    final pickedTime = result['time'] as TimeOfDay?;
     DateTime? scheduledAt;
     if (pickedDate != null) {
       final t = pickedTime ?? const TimeOfDay(hour: 10, minute: 0);
-      scheduledAt = DateTime(pickedDate!.year, pickedDate!.month,
-          pickedDate!.day, t.hour, t.minute);
+      scheduledAt = DateTime(
+          pickedDate.year, pickedDate.month, pickedDate.day, t.hour, t.minute);
     }
 
     await _run(() => BattleService.challenge(
           opponentTeamId: (team['id'] ?? '').toString(),
-          venue:       result['venue'] ?? '',
-          area:        result['area']  ?? '',
+          venue:       (result['venue'] ?? '').toString(),
+          area:        (result['area']  ?? '').toString(),
           scheduledAt: scheduledAt,
         ));
   }
 
   // ── decline dialog ───────────────────────────────────────────────────────
   Future<void> _declineDialog(Map<String, dynamic> battle) async {
-    final reasonCtl = TextEditingController();
-    final ok = await showDialog<bool>(
+    // null = cancel, warna reason string (empty bhi ho sakti hai)
+    final reason = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Challenge decline karein?',
-            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
-        content: TextField(
-          controller: reasonCtl,
-          maxLines: 2,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(
-            labelText: 'Reason (optional)',
-            hintText: 'e.g. Time nahi hai abhi',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Ruko',
-                  style: TextStyle(color: Color(0xFF9E9E9E)))),
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Decline karo',
-                  style: TextStyle(
-                      color: Colors.redAccent,
-                      fontWeight: FontWeight.w800))),
-        ],
-      ),
+      builder: (ctx) => const _DeclineDialog(),
     );
-    final reason = reasonCtl.text.trim();
-    reasonCtl.dispose();
-    if (ok != true) return;
+    if (reason == null || !mounted) return;
     await _run(
         () => BattleService.reject(battle['id'].toString(), reason: reason));
   }
@@ -703,18 +667,8 @@ class _BattleArenaScreenState extends State<BattleArenaScreen> {
 // ════════════════════════════════════════════════════════════════════════════
 class _ChallengeSheet extends StatefulWidget {
   final String teamName;
-  final TextEditingController venueCtl;
-  final TextEditingController areaCtl;
-  final void Function(DateTime) onPickDate;
-  final void Function(TimeOfDay) onPickTime;
 
-  const _ChallengeSheet({
-    required this.teamName,
-    required this.venueCtl,
-    required this.areaCtl,
-    required this.onPickDate,
-    required this.onPickTime,
-  });
+  const _ChallengeSheet({required this.teamName});
 
   @override
   State<_ChallengeSheet> createState() => _ChallengeSheetState();
@@ -724,8 +678,17 @@ class _ChallengeSheetState extends State<_ChallengeSheet> {
   static const _pink   = Color(0xFFE93D95);
   static const _purple = Color(0xFFA64CF5);
 
+  final TextEditingController _venueCtl = TextEditingController();
+  final TextEditingController _areaCtl  = TextEditingController();
   DateTime?  _date;
   TimeOfDay? _time;
+
+  @override
+  void dispose() {
+    _venueCtl.dispose();
+    _areaCtl.dispose();
+    super.dispose();
+  }
 
   Future<void> _pickDate() async {
     final now = DateTime.now();
@@ -742,7 +705,7 @@ class _ChallengeSheetState extends State<_ChallengeSheet> {
         child: child!,
       ),
     );
-    if (d != null) { setState(() => _date = d); widget.onPickDate(d); }
+    if (d != null && mounted) setState(() => _date = d);
   }
 
   Future<void> _pickTime() async {
@@ -757,7 +720,7 @@ class _ChallengeSheetState extends State<_ChallengeSheet> {
         child: child!,
       ),
     );
-    if (t != null) { setState(() => _time = t); widget.onPickTime(t); }
+    if (t != null && mounted) setState(() => _time = t);
   }
 
   String get _dateStr {
@@ -811,7 +774,7 @@ class _ChallengeSheetState extends State<_ChallengeSheet> {
 
         // Venue
         TextField(
-          controller: widget.venueCtl,
+          controller: _venueCtl,
           textCapitalization: TextCapitalization.words,
           decoration: _deco('Venue', 'Jhalana Ground, Lal Kothi…',
               Icons.location_on_outlined),
@@ -819,7 +782,7 @@ class _ChallengeSheetState extends State<_ChallengeSheet> {
         const SizedBox(height: 10),
         // Area
         TextField(
-          controller: widget.areaCtl,
+          controller: _areaCtl,
           textCapitalization: TextCapitalization.words,
           decoration: _deco('Area / City', 'Jhalana, Jaipur', Icons.map_outlined),
         ),
@@ -835,8 +798,10 @@ class _ChallengeSheetState extends State<_ChallengeSheet> {
         // Send button
         GestureDetector(
           onTap: () => Navigator.pop(context, {
-            'venue': widget.venueCtl.text.trim(),
-            'area':  widget.areaCtl.text.trim(),
+            'venue': _venueCtl.text.trim(),
+            'area':  _areaCtl.text.trim(),
+            'date':  _date,
+            'time':  _time,
           }),
           child: Container(
             width: double.infinity, height: 52,
@@ -907,4 +872,55 @@ class _ChallengeSheetState extends State<_ChallengeSheet> {
           ]),
         ),
       );
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// Decline dialog (controller isi widget ke andar dispose hota hai)
+// ════════════════════════════════════════════════════════════════════════════
+class _DeclineDialog extends StatefulWidget {
+  const _DeclineDialog();
+
+  @override
+  State<_DeclineDialog> createState() => _DeclineDialogState();
+}
+
+class _DeclineDialogState extends State<_DeclineDialog> {
+  final TextEditingController _reasonCtl = TextEditingController();
+
+  @override
+  void dispose() {
+    _reasonCtl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: const Text('Challenge decline karein?',
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+      content: TextField(
+        controller: _reasonCtl,
+        maxLines: 2,
+        textCapitalization: TextCapitalization.sentences,
+        decoration: const InputDecoration(
+          labelText: 'Reason (optional)',
+          hintText: 'e.g. Time nahi hai abhi',
+          border: OutlineInputBorder(),
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Ruko',
+                style: TextStyle(color: Color(0xFF9E9E9E)))),
+        TextButton(
+            onPressed: () => Navigator.pop(context, _reasonCtl.text.trim()),
+            child: const Text('Decline karo',
+                style: TextStyle(
+                    color: Colors.redAccent, fontWeight: FontWeight.w800))),
+      ],
+    );
+  }
 }
