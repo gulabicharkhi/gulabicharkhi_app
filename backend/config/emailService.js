@@ -1,16 +1,28 @@
+// ============================================================
+// config/emailService.js — UPDATED
+// Render (free tier) SMTP ports (25/465/587) block karta hai, isliye
+// ab Brevo ka HTTP API (port 443) use hota hai. SMTP sirf local fallback.
+// ============================================================
 const nodemailer = require('nodemailer');
 
 const getConfig = () => ({
+  apiKey: (process.env.BREVO_API_KEY || '').trim(),
+  // Brevo me VERIFIED sender email (Senders & IP -> Senders). smtp-brevo.com wala login yahan mat daalo
+  from: (process.env.EMAIL_FROM || '').trim(),
+  fromName: (process.env.EMAIL_FROM_NAME || 'Gulabi Charkhi').trim(),
   host: (process.env.EMAIL_HOST || 'smtp-relay.brevo.com').trim(),
   port: parseInt(process.env.EMAIL_PORT || '587', 10),
   user: (process.env.EMAIL_USER || '').trim(),
   pass: (process.env.EMAIL_PASS || '').trim(),
 });
 
+const useApi = () => !!getConfig().apiKey;
+
 const isConfigured = () => {
-  const { user, pass } = getConfig();
-  if (!user || !pass) return false;
-  if (user.includes('aapkaemail') || pass.toLowerCase().startsWith('xxxx')) return false;
+  const c = getConfig();
+  if (c.apiKey) return !!c.from;
+  if (!c.user || !c.pass) return false;
+  if (c.user.includes('aapkaemail') || c.pass.toLowerCase().startsWith('xxxx')) return false;
   return true;
 };
 
@@ -19,7 +31,7 @@ const createTransporter = () => {
   return nodemailer.createTransport({
     host,
     port,
-  secure: process.env.EMAIL_SECURE === 'true',
+    secure: process.env.EMAIL_SECURE === 'true',
     auth: { user, pass },
     connectionTimeout: 15000,
     greetingTimeout: 15000,
@@ -30,11 +42,16 @@ const createTransporter = () => {
 const explainError = (error) => {
   const code = error && error.code;
   const msg = (error && error.message) || '';
+  if (error && error.brevoStatus) {
+    if (error.brevoStatus === 401) return 'Brevo API key galat hai (xkeysib-... wali API key chahiye, SMTP key nahi).';
+    if (error.brevoStatus === 400 || error.brevoStatus === 403) return `Brevo ne request reject ki: ${msg}. Sender email verify karo (Senders & IP).`;
+    return `Brevo API error ${error.brevoStatus}: ${msg}`;
+  }
   if (code === 'EAUTH' || /Invalid login|Username and Password not accepted|535/i.test(msg)) {
     return 'Brevo ne login reject kiya — SMTP key galat hai ya account mein SMTP enable nahi hai.';
   }
   if (['ETIMEDOUT', 'ESOCKET', 'ECONNECTION', 'ECONNREFUSED', 'EDNS', 'ENOTFOUND'].includes(code)) {
-    return `Server ${getConfig().host}:${getConfig().port} tak pahunch nahi pa raha.`;
+    return `Server ${getConfig().host}:${getConfig().port} tak pahunch nahi pa raha (Render SMTP block karta hai — BREVO_API_KEY use karo).`;
   }
   if (code === 'EENVELOPE') return 'Receiver email address valid nahi hai.';
   return msg || 'Unknown email error';
@@ -43,15 +60,57 @@ const explainError = (error) => {
 const escapeHtml = (s = '') =>
   String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+// ---------- Brevo HTTP API (port 443) ----------
+const sendViaApi = async ({ to, subject, text, html }) => {
+  const { apiKey, from, fromName } = getConfig();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20000);
+  try {
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: { 'api-key': apiKey, 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify({
+        sender: { name: fromName, email: from },
+        to: [{ email: to }],
+        subject,
+        textContent: text,
+        htmlContent: html,
+      }),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      let detail = '';
+      try { detail = (await res.json()).message || ''; } catch (_) {}
+      const err = new Error(detail || res.statusText);
+      err.brevoStatus = res.status;
+      throw err;
+    }
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
 const verifyEmailSetup = async () => {
   if (!isConfigured()) {
-    console.warn('⚠️  EMAIL_USER / EMAIL_PASS .env mein set nahi hain. OTP sirf console mein dikhega.');
+    console.warn('⚠️  Email config missing (BREVO_API_KEY + EMAIL_FROM, ya EMAIL_USER/EMAIL_PASS). OTP sirf console mein dikhega.');
     return false;
   }
   try {
-    await createTransporter().verify();
-    const { host, port, user } = getConfig();
-    console.log(`✅ Email ready — ${user} via ${host}:${port}`);
+    if (useApi()) {
+      const res = await fetch('https://api.brevo.com/v3/account', {
+        headers: { 'api-key': getConfig().apiKey, accept: 'application/json' },
+      });
+      if (!res.ok) {
+        const err = new Error(res.statusText);
+        err.brevoStatus = res.status;
+        throw err;
+      }
+      console.log(`✅ Email ready — Brevo HTTP API, sender ${getConfig().from}`);
+    } else {
+      await createTransporter().verify();
+      const { host, port, user } = getConfig();
+      console.log(`✅ Email ready — ${user} via ${host}:${port}`);
+    }
     return true;
   } catch (error) {
     console.error('❌ Email setup FAIL:', explainError(error));
@@ -64,21 +123,14 @@ const sendOtpEmail = async (toEmail, otp, userName, purpose = 'verify') => {
   const codeName = isReset ? 'password reset code' : 'verification code';
 
   if (!isConfigured()) {
-    const hint = '.env mein EMAIL_USER / EMAIL_PASS set nahi hain.';
+    const hint = 'Email config set nahi hai (BREVO_API_KEY + EMAIL_FROM).';
     console.error('Email send error:', hint);
     return { success: false, error: hint, hint };
   }
 
-  try {
-    const transporter = createTransporter();
-    const { user } = getConfig();
-
-    await transporter.sendMail({
-      from: `"Gulabi Charkhi" <${user}>`,
-      to: toEmail,
-      subject: `${otp} is your Gulabi Charkhi ${codeName}`,
-      text: `Hello ${userName || 'Player'}, your Gulabi Charkhi ${codeName} is ${otp}. It expires in 10 minutes. Never share this code with anyone.`,
-      html: `
+  const subject = `${otp} is your Gulabi Charkhi ${codeName}`;
+  const text = `Hello ${userName || 'Player'}, your Gulabi Charkhi ${codeName} is ${otp}. It expires in 10 minutes. Never share this code with anyone.`;
+  const html = `
         <!DOCTYPE html>
         <html>
         <head>
@@ -123,13 +175,25 @@ const sendOtpEmail = async (toEmail, otp, userName, purpose = 'verify') => {
           </div>
         </body>
         </html>
-      `,
-    });
+      `;
 
+  try {
+    if (useApi()) {
+      await sendViaApi({ to: toEmail, subject, text, html });
+    } else {
+      const { user, from } = getConfig();
+      await createTransporter().sendMail({
+        from: `"Gulabi Charkhi" <${from || user}>`,
+        to: toEmail,
+        subject,
+        text,
+        html,
+      });
+    }
     return { success: true };
   } catch (error) {
     const hint = explainError(error);
-    console.error('Email send error:', hint, `[${error.code || 'no-code'}] ${error.message}`);
+    console.error('Email send error:', hint, `[${error.code || error.brevoStatus || 'no-code'}] ${error.message}`);
     return { success: false, error: error.message, hint };
   }
 };
