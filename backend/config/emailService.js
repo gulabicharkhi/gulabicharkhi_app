@@ -19,7 +19,7 @@ const createTransporter = () => {
   return nodemailer.createTransport({
     host,
     port,
-    secure: false,
+  secure: process.env.EMAIL_SECURE === 'true',
     auth: { user, pass },
     connectionTimeout: 15000,
     greetingTimeout: 15000,
