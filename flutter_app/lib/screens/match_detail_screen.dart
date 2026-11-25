@@ -139,37 +139,14 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
   }
 
   // ── reject cut dialog ─────────────────────────────────────────────────────
+  // The controller lives inside _RejectCutDialog (disposed with the dialog, after the close animation).
   Future<void> _rejectCut(String cutId) async {
-    final ctl = TextEditingController();
-    final ok = await showDialog<bool>(
+    // null = Back pressed, otherwise the reason (can be empty)
+    final reason = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Reject the cut?',
-            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
-        content: TextField(
-          controller: ctl,
-          decoration: const InputDecoration(
-              labelText: 'Reason (optional)',
-              border: OutlineInputBorder()),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Back',
-                  style: TextStyle(color: Color(0xFF9E9E9E)))),
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Reject',
-                  style: TextStyle(
-                      color: Colors.redAccent,
-                      fontWeight: FontWeight.w800))),
-        ],
-      ),
+      builder: (ctx) => const _RejectCutDialog(),
     );
-    final reason = ctl.text.trim();
-    ctl.dispose();
-    if (ok != true) return;
+    if (reason == null || !mounted) return;
     await _act(() => BattleService.respondCut(
         widget.matchId, cutId,
         approve: false, reason: reason));
@@ -1847,6 +1824,54 @@ class _OpponentPickerSheet extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// Reject-cut dialog (its own controller, so it is not disposed too early)
+// ════════════════════════════════════════════════════════════════════════════
+class _RejectCutDialog extends StatefulWidget {
+  const _RejectCutDialog();
+
+  @override
+  State<_RejectCutDialog> createState() => _RejectCutDialogState();
+}
+
+class _RejectCutDialogState extends State<_RejectCutDialog> {
+  final TextEditingController _ctl = TextEditingController();
+
+  @override
+  void dispose() {
+    _ctl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: const Text('Reject the cut?',
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+      content: TextField(
+        controller: _ctl,
+        maxLines: 2,
+        textCapitalization: TextCapitalization.sentences,
+        decoration: const InputDecoration(
+            labelText: 'Reason (optional)', border: OutlineInputBorder()),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Back',
+                style: TextStyle(color: Color(0xFF9E9E9E)))),
+        TextButton(
+            onPressed: () => Navigator.pop(context, _ctl.text.trim()),
+            child: const Text('Reject',
+                style: TextStyle(
+                    color: Colors.redAccent, fontWeight: FontWeight.w800))),
+      ],
     );
   }
 }
