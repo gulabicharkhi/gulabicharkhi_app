@@ -112,6 +112,16 @@ class BattleService {
 
   static Future<Map<String, dynamic>> end(String id) => _post('/battles/${_id(id)}/end');
 
+  // ==================== Notifications (in-app list) ====================
+  static Future<Map<String, dynamic>> notifications({int limit = 50}) =>
+      _get('/notifications', {'limit': '$limit'});
+
+  static Future<Map<String, dynamic>> unreadNotifications() =>
+      _get('/notifications', {'limit': '1', 'unreadOnly': 'true'});
+
+  static Future<Map<String, dynamic>> markAllNotificationsRead() =>
+      _post('/notifications/read-all');
+
   static Map<String, dynamic>? asMap(dynamic v) =>
       v is Map ? Map<String, dynamic>.from(v) : null;
 

@@ -11,6 +11,7 @@ import '../widgets/leaderboard_sheet.dart';
 ///   pending  → accept / cancel buttons
 ///   accepted → both captains "Start Battle"
 ///   live     → score + "Claim Cut" + live feed (auto refresh 10s)
+///              + floating PLAYERS panel (side drawer) with quick-claim
 ///   final    → result + winner banner + stats
 class MatchDetailScreen extends StatefulWidget {
   final String matchId;
@@ -30,6 +31,9 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
   bool _loading = true;
   bool _busy    = false;
   Timer? _timer;
+
+  // Players side panel state
+  bool _panelOpen = false;
 
   // Animation for LIVE pulsing dot
   late final AnimationController _pulse;
@@ -196,17 +200,490 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
     );
   }
 
+  // ── quick cut from player panel ────────────────────────────────────────────
+  Future<void> _quickClaimCut(
+      String winnerId, String winnerName,
+      String loserId, String loserName) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Claim Cut ✂️',
+            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+        content: Text(
+          '$winnerName (your team) cut $loserName\'s kite?',
+          style: const TextStyle(fontSize: 13.5, color: Color(0xFF555555)),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel',
+                  style: TextStyle(color: Color(0xFF9E9E9E)))),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Send Claim',
+                  style: TextStyle(
+                      color: _pink, fontWeight: FontWeight.w800))),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    await _act(() => BattleService.claimCut(
+      widget.matchId,
+      winnerIds: [winnerId],
+      loserIds: [loserId],
+    ));
+  }
+
   // ════════════════════════════════════════════════════════════════════════
   // BUILD
   // ════════════════════════════════════════════════════════════════════════
   @override
   Widget build(BuildContext context) {
+    final isLive = _m?['status'] == 'live';
+    final isCaptain = _m?['myCaptainRole'] != null;
+    final showPanel = isLive; // panel visible during live match for all, claim only for captains
+
     return Scaffold(
       backgroundColor: const Color(0xFFFDEBF4),
-      body: Column(children: [
-        _buildHeader(),
-        Expanded(child: _body()),
-      ]),
+      body: Stack(
+        children: [
+          // Main content
+          Column(children: [
+            _buildHeader(),
+            Expanded(child: _body()),
+          ]),
+
+          // Players side panel overlay (slide in from right)
+          if (showPanel) ...[
+            // Backdrop tap to close
+            if (_panelOpen)
+              GestureDetector(
+                onTap: () => setState(() => _panelOpen = false),
+                child: Container(
+                  color: Colors.black.withValues(alpha: 0.35),
+                ),
+              ),
+
+            // The panel itself
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 280),
+              curve: Curves.easeInOut,
+              right: _panelOpen ? 0 : -300,
+              top: 0,
+              bottom: 0,
+              width: 290,
+              child: _playersPanel(),
+            ),
+
+            // FAB toggle button
+            Positioned(
+              right: _panelOpen ? 298 : 12,
+              bottom: 100,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 280),
+                curve: Curves.easeInOut,
+                child: GestureDetector(
+                  onTap: () => setState(() => _panelOpen = !_panelOpen),
+                  child: Container(
+                    width: 48,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFE93D95), Color(0xFFA64CF5)],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFE93D95).withValues(alpha: 0.4),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          _panelOpen ? Icons.chevron_right_rounded : Icons.people_rounded,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                        const SizedBox(height: 2),
+                        const Text(
+                          'Players',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ── players side panel ────────────────────────────────────────────────────
+  Widget _playersPanel() {
+    final m = _m;
+    if (m == null) return const SizedBox.shrink();
+
+    final myRole = (m['myCaptainRole'] ?? '').toString();
+    final isCaptain = myRole == 'challenger' || myRole == 'opponent';
+    final iAmChallenger = myRole == 'challenger';
+
+    final rosters = BattleService.asMap(m['rosters']) ?? {};
+    final ch = BattleService.asMap(m['challengerTeam']) ?? {};
+    final op = BattleService.asMap(m['opponentTeam']) ?? {};
+
+    // Player board (live W/L stats)
+    final board = BattleService.asList(m['playerBoard']);
+    final statsMap = <String, Map<String, dynamic>>{};
+    for (final p in board) {
+      statsMap[(p['id'] ?? '').toString()] = p;
+    }
+
+    final challPlayers = BattleService.asList(rosters['challenger']);
+    final oppPlayers   = BattleService.asList(rosters['opponent']);
+
+    final myPlayers  = iAmChallenger ? challPlayers : oppPlayers;
+    final oppTeamPlayers = iAmChallenger ? oppPlayers : challPlayers;
+    final myTeamName  = ((iAmChallenger ? ch['name'] : op['name']) ?? '').toString();
+    final oppTeamName = ((iAmChallenger ? op['name'] : ch['name']) ?? '').toString();
+
+    // If captain, pre-select logic for quick claim
+    // We hold selection in state only if needed; use the quick dialog instead
+
+    return SafeArea(
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(24),
+            bottomLeft: Radius.circular(24),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Color(0x33000000),
+              blurRadius: 24,
+              offset: Offset(-4, 0),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Panel header
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(16, 18, 12, 14),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFFE93D95), Color(0xFFA64CF5)],
+                ),
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(24),
+                ),
+              ),
+              child: Row(children: [
+                const Icon(Icons.people_rounded, color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Players',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => setState(() => _panelOpen = false),
+                  child: const Icon(Icons.close_rounded,
+                      color: Colors.white70, size: 22),
+                ),
+              ]),
+            ),
+
+            if (isCaptain)
+              Container(
+                margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF3CD),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFFBBF24), width: 1),
+                ),
+                child: const Row(children: [
+                  Icon(Icons.info_outline_rounded,
+                      size: 14, color: Color(0xFFB45309)),
+                  SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Tap a player from your team, then tap an opponent to claim a cut.',
+                      style: TextStyle(
+                          fontSize: 11, color: Color(0xFFB45309)),
+                    ),
+                  ),
+                ]),
+              ),
+
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(0, 8, 0, 20),
+                children: [
+                  // ── My Team ──────────────────────────────────────────────
+                  _panelTeamSection(
+                    teamName: myTeamName,
+                    label: 'Your Team',
+                    labelColor: const Color(0xFF15803D),
+                    players: myPlayers,
+                    statsMap: statsMap,
+                    isMyTeam: true,
+                    isCaptain: isCaptain,
+                    oppTeamPlayers: oppTeamPlayers,
+                    oppTeamName: oppTeamName,
+                  ),
+
+                  const Divider(height: 20, indent: 16, endIndent: 16),
+
+                  // ── Opponent Team ─────────────────────────────────────────
+                  _panelTeamSection(
+                    teamName: oppTeamName,
+                    label: 'Opponent',
+                    labelColor: const Color(0xFFB91C1C),
+                    players: oppTeamPlayers,
+                    statsMap: statsMap,
+                    isMyTeam: false,
+                    isCaptain: isCaptain,
+                    oppTeamPlayers: myPlayers,
+                    oppTeamName: myTeamName,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _panelTeamSection({
+    required String teamName,
+    required String label,
+    required Color labelColor,
+    required List<Map<String, dynamic>> players,
+    required Map<String, Map<String, dynamic>> statsMap,
+    required bool isMyTeam,
+    required bool isCaptain,
+    required List<Map<String, dynamic>> oppTeamPlayers,
+    required String oppTeamName,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: labelColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(label,
+                  style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      color: labelColor)),
+            ),
+            const SizedBox(width: 8),
+            Text(teamName,
+                style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF1A1A1A))),
+          ]),
+          const SizedBox(height: 8),
+          if (players.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Text('No players listed',
+                  style: TextStyle(
+                      fontSize: 12, color: Colors.grey[500])),
+            )
+          else
+            ...players.map((p) {
+              final pid = (p['id'] ?? '').toString();
+              final pname = (p['name'] ?? '').toString();
+              final stat = statsMap[pid];
+              final wins   = stat?['wins']   as int? ?? 0;
+              final losses = stat?['losses'] as int? ?? 0;
+
+              return _playerRow(
+                pid: pid,
+                name: pname,
+                wins: wins,
+                losses: losses,
+                isMyTeam: isMyTeam,
+                isCaptain: isCaptain,
+                oppTeamPlayers: oppTeamPlayers,
+                oppTeamName: oppTeamName,
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  Widget _playerRow({
+    required String pid,
+    required String name,
+    required int wins,
+    required int losses,
+    required bool isMyTeam,
+    required bool isCaptain,
+    required List<Map<String, dynamic>> oppTeamPlayers,
+    required String oppTeamName,
+  }) {
+    final hasStats = wins > 0 || losses > 0;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: GestureDetector(
+        onTap: (isCaptain && isMyTeam && oppTeamPlayers.isNotEmpty)
+            ? () => _showOpponentPicker(
+                  winnerId: pid,
+                  winnerName: name,
+                  oppPlayers: oppTeamPlayers,
+                  oppTeamName: oppTeamName,
+                )
+            : null,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+          decoration: BoxDecoration(
+            color: (isCaptain && isMyTeam)
+                ? const Color(0xFFF0FDF4)
+                : const Color(0xFFFAFAFA),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: (isCaptain && isMyTeam)
+                  ? const Color(0xFF86EFAC)
+                  : const Color(0xFFEEEEEE),
+              width: 1,
+            ),
+          ),
+          child: Row(children: [
+            // Avatar circle
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: isMyTeam
+                      ? [const Color(0xFF15803D), const Color(0xFF16A34A)]
+                      : [const Color(0xFFB91C1C), const Color(0xFFDC2626)],
+                ),
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                name.isNotEmpty ? name[0].toUpperCase() : '?',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 13),
+              ),
+            ),
+            const SizedBox(width: 10),
+            // Name
+            Expanded(
+              child: Text(name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF1A1A1A))),
+            ),
+            // Cuts stats
+            if (hasStats) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDCFCE7),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text('${wins}W',
+                    style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF15803D))),
+              ),
+              const SizedBox(width: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEE2E2),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text('${losses}L',
+                    style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFFB91C1C))),
+              ),
+            ] else if (isCaptain && isMyTeam) ...[
+              const Icon(Icons.arrow_forward_ios_rounded,
+                  size: 13, color: Color(0xFFBBBBBB)),
+            ],
+          ]),
+        ),
+      ),
+    );
+  }
+
+  // ── Opponent picker for quick cut claim ──────────────────────────────────
+  Future<void> _showOpponentPicker({
+    required String winnerId,
+    required String winnerName,
+    required List<Map<String, dynamic>> oppPlayers,
+    required String oppTeamName,
+  }) async {
+    final m = _m;
+    if (m == null) return;
+
+    final board = BattleService.asList(m['playerBoard']);
+    final statsMap = <String, Map<String, dynamic>>{};
+    for (final p in board) {
+      statsMap[(p['id'] ?? '').toString()] = p;
+    }
+
+    final chosen = await showModalBottomSheet<Map<String, String>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _OpponentPickerSheet(
+        winnerName: winnerName,
+        oppTeamName: oppTeamName,
+        oppPlayers: oppPlayers,
+        statsMap: statsMap,
+      ),
+    );
+
+    if (chosen == null || !mounted) return;
+    await _quickClaimCut(
+      winnerId, winnerName,
+      chosen['id']!, chosen['name']!,
     );
   }
 
@@ -341,7 +818,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
       color: _pink,
       onRefresh: () => _load(silent: true),
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 30),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 100),
         children: [
           // ── SCOREBOARD ──────────────────────────────────────────────────
           _scoreCard(m, status, ch, op),
@@ -536,9 +1013,9 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
           () async {
             final ok = await _confirm(
                 'Decline?',
-                'This challenge will be cancelled.',
+                'This challenge will be declined and the challenger captain will be notified.',
                 'Decline');
-            if (ok) await _act(() => BattleService.cancel(id));
+            if (ok) await _act(() => BattleService.reject(id));
           },
           outline: true,
           danger: true,
@@ -1182,6 +1659,193 @@ class _BoutSheetState extends State<_BoutSheet> {
                 ),
               ),
             ]),
+      ),
+    );
+  }
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// Opponent picker sheet — shown when captain taps one of their own players
+// to quickly pick which opponent player was defeated
+// ════════════════════════════════════════════════════════════════════════════
+class _OpponentPickerSheet extends StatelessWidget {
+  final String winnerName;
+  final String oppTeamName;
+  final List<Map<String, dynamic>> oppPlayers;
+  final Map<String, Map<String, dynamic>> statsMap;
+
+  const _OpponentPickerSheet({
+    required this.winnerName,
+    required this.oppTeamName,
+    required this.oppPlayers,
+    required this.statsMap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.75),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Handle
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 12, bottom: 4),
+              child: Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                    color: const Color(0xFFDDDDDD),
+                    borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+          ),
+          // Header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 4),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Who was defeated? ✂️',
+                  style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF1A1A1A))),
+              const SizedBox(height: 4),
+              RichText(
+                text: TextSpan(
+                  style: const TextStyle(fontSize: 12.5, color: Color(0xFF9E9E9E)),
+                  children: [
+                    const TextSpan(text: 'Select the '),
+                    TextSpan(
+                        text: oppTeamName,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFFB91C1C))),
+                    const TextSpan(text: ' player whose kite was cut by '),
+                    TextSpan(
+                        text: winnerName,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF15803D))),
+                    const TextSpan(text: '.'),
+                  ],
+                ),
+              ),
+            ]),
+          ),
+          const Divider(height: 20, indent: 16, endIndent: 16),
+          // Player list
+          Flexible(
+            child: ListView.builder(
+              shrinkWrap: true,
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+              itemCount: oppPlayers.length,
+              itemBuilder: (ctx, i) {
+                final p = oppPlayers[i];
+                final pid = (p['id'] ?? '').toString();
+                final pname = (p['name'] ?? '').toString();
+                final stat = statsMap[pid];
+                final wins   = stat?['wins']   as int? ?? 0;
+                final losses = stat?['losses'] as int? ?? 0;
+                final hasStats = wins > 0 || losses > 0;
+
+                return GestureDetector(
+                  onTap: () => Navigator.pop(ctx, {'id': pid, 'name': pname}),
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF5F5),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: const Color(0xFFFECACA), width: 1),
+                    ),
+                    child: Row(children: [
+                      // Avatar
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Color(0xFFB91C1C), Color(0xFFDC2626)],
+                          ),
+                          shape: BoxShape.circle,
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          pname.isNotEmpty ? pname[0].toUpperCase() : '?',
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 14),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(pname,
+                            style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF1A1A1A))),
+                      ),
+                      if (hasStats) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFDCFCE7),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text('${wins}W',
+                              style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w900,
+                                  color: Color(0xFF15803D))),
+                        ),
+                        const SizedBox(width: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEE2E2),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text('${losses}L',
+                              style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w900,
+                                  color: Color(0xFFB91C1C))),
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+                      const Icon(Icons.chevron_right_rounded,
+                          color: Color(0xFFB91C1C), size: 20),
+                    ]),
+                  ),
+                );
+              },
+            ),
+          ),
+          // Cancel
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+                16, 0, 16, MediaQuery.of(context).viewInsets.bottom + 12),
+            child: Center(
+              child: TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel',
+                    style: TextStyle(color: Color(0xFF9E9E9E))),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

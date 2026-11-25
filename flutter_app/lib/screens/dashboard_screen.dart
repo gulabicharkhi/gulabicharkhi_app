@@ -15,6 +15,7 @@ import '../widgets/match_card.dart';
 import '../widgets/leaderboard_sheet.dart';
 import 'match_detail_screen.dart';
 import 'matches_screen.dart';
+import 'notifications_screen.dart';
 import 'profile_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -52,6 +53,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _matchesCity = '';
   bool _matchesLoaded = false;
 
+  // ---- Notifications (bell badge) ----
+  int _unread = 0;
+
+  Future<void> _loadUnread() async {
+    final res = await BattleService.unreadNotifications();
+    if (!mounted || res['success'] != true) return;
+    setState(() => _unread = (res['unreadCount'] as num?)?.toInt() ?? 0);
+  }
+
+  Future<void> _openNotifications() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+    );
+    if (!mounted) return;
+    _loadUnread();
+    _loadMatches(force: true);
+  }
+
   // ---- Weather ----
   WeatherInfo? _weather;
   String _weatherCity = '';
@@ -67,6 +87,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _loadUser();
     // Sync the FCM token to the server as soon as the app opens (also for already logged-in users)
     NotificationService.registerToken();
+    _loadUnread();
     // Weather refreshes every 15 minutes
     _weatherTimer = Timer.periodic(
       const Duration(minutes: 15),
@@ -399,9 +420,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: IconButton(
-                  onPressed: () {},
-                  icon: const Icon(Icons.notifications_none_rounded,
-                      color: Colors.white, size: 22),
+                  onPressed: _openNotifications,
+                  icon: Stack(clipBehavior: Clip.none, children: [
+                    const Icon(Icons.notifications_none_rounded,
+                        color: Colors.white, size: 22),
+                    if (_unread > 0)
+                      Positioned(
+                        right: -4,
+                        top: -4,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEF4444),
+                            borderRadius: BorderRadius.circular(9),
+                          ),
+                          child: Text(_unread > 9 ? '9+' : '$_unread',
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w900)),
+                        ),
+                      ),
+                  ]),
                 ),
               ),
             ],
